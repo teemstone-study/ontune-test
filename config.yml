@@ -1,0 +1,32 @@
+database:
+  - name: pg-dbtest
+    host: 192.168.0.187
+    port: 15432
+    dbname: ontune
+    username: ontune
+    password: ontune
+  - name: tsdb-dbtest
+    host: 192.168.0.188
+    port: 15432
+    dbname: ontune
+    username: ontune
+    password: ontune    
+
+host:
+  ignoreprocessorcountchange: 0
+  active: 1
+  perf:
+    rate: 2
+    avg: 600
+  proc:
+    rate: 5
+    avg: 600
+  io:
+    rate: 5
+    avg: 600
+  cpu:
+    rate: 5
+    avg: 600
+
+demo:
+  host_count: 10000
