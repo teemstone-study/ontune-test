@@ -13,6 +13,7 @@ import (
 // DB: Database Thread
 
 func main() {
+	app.LogWrite("log", "---")
 	config := app.GetConfig("config.yml")
 	hostcount := config.Demo.HostCount
 
@@ -50,14 +51,7 @@ func main() {
 			}
 		case agent_data := <-app.GlobalChannel.AgentData:
 			// Deep Copy
-			receive_data := make(map[string]map[int]interface{})
-			for k1, v1 := range agent_data {
-				detail_data := make(map[int]interface{})
-				for k2, v2 := range v1 {
-					detail_data[k2] = v2
-				}
-				receive_data[k1] = detail_data
-			}
+			receive_data := app.CopyAgentMap(agent_data)
 			app.GlobalChannel.AgentCopyDone <- true
 
 			for _, dh := range db_handler {
@@ -65,40 +59,25 @@ func main() {
 				wg.Add(app.MAX_THREAD + 1)
 
 				// Deep Copy
-				insert_data := sync.Map{}
-				for k1, v1 := range receive_data {
-					detail_data := make(map[int]interface{})
-					for k2, v2 := range v1 {
-						detail_data[k2] = v2
-					}
-					insert_data.Store(k1, detail_data)
-				}
+				insert_data := app.CopyAgentMap(receive_data)
 
-				if lrtp_data, ok := insert_data.Load("lastrealtimeperf"); ok {
-					go dh.InsertLastRealtimePerfData(lrtp_data.(map[int]interface{}), &wg)
-				}
+				go dh.InsertLastRealtimePerfData(insert_data, &wg)
 
 				for i := 0; i < app.MAX_THREAD; i++ {
-					go dh.InsertAgentData(&insert_data, &wg, i)
+					go dh.InsertAgentData(insert_data, &wg, i)
 				}
 				wg.Wait()
-				app.AgentDataProcess = make(map[string]struct{})
+				app.AgentDataProcess = &sync.Map{}
 			}
 
 			app.GlobalChannel.AgentInsertDone <- true
 			app.LogWrite("log", fmt.Sprintf("agent insert completed %v", time.Now()))
 		case lastperf_data := <-app.GlobalChannel.LastPerfData:
-			receive_data := make(map[int]interface{})
-			for k2, v2 := range lastperf_data {
-				receive_data[k2] = v2
-			}
+			receive_data := app.CopyMap(lastperf_data)
 			app.GlobalChannel.LastperfCopyDone <- true
 
 			for _, dh := range db_handler {
-				insert_data := make(map[int]interface{})
-				for k2, v2 := range receive_data {
-					insert_data[k2] = v2
-				}
+				insert_data := app.CopyMap(receive_data)
 
 				var wg sync.WaitGroup
 				wg.Add(1)

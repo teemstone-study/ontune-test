@@ -18,10 +18,10 @@ const (
 )
 
 var (
-	MapHostifo         map[int]string      = make(map[int]string)
-	GlobalOntunetime   int64               = time.Now().Unix()
-	GlobalOntunetimets time.Time           = time.Now()
-	AgentDataProcess   map[string]struct{} = make(map[string]struct{})
+	MapHostifo         map[int]string = make(map[int]string)
+	GlobalOntunetime   int64          = time.Now().Unix()
+	GlobalOntunetimets time.Time      = time.Now()
+	AgentDataProcess   *sync.Map      = &sync.Map{}
 )
 
 type Bitmask uint32
@@ -31,35 +31,24 @@ func (value Bitmask) IsSet(key Bitmask) bool {
 }
 
 type ChannelStruct struct {
-	DemoBasicData      chan []data.Basicperf
-	DemoAvgBasicData   chan []data.Basicperf
+	DemoBasicData      chan []*data.Basicperf
+	DemoAvgBasicData   chan []*data.Basicperf
 	AverageRequest     chan string
-	AgentData          chan map[string]map[int]interface{}
-	LastPerfData       chan map[int]interface{}
+	AgentData          chan *sync.Map
+	LastPerfData       chan *sync.Map
 	AgentCopyDone      chan bool
 	LastperfCopyDone   chan bool
 	AgentInsertDone    chan bool
 	LastperfInsertDone chan bool
 }
 
-type MutexStruct struct {
-	DBAgentDataM  *sync.Mutex
-	ProcDataM     *sync.Mutex
-	DemoAvgBasicM *sync.Mutex
-}
-
 var (
-	GlobalMutex MutexStruct = MutexStruct{
-		DBAgentDataM:  &sync.Mutex{},
-		ProcDataM:     &sync.Mutex{},
-		DemoAvgBasicM: &sync.Mutex{},
-	}
 	GlobalChannel ChannelStruct = ChannelStruct{
-		DemoBasicData:      make(chan []data.Basicperf),
-		DemoAvgBasicData:   make(chan []data.Basicperf),
+		DemoBasicData:      make(chan []*data.Basicperf),
+		DemoAvgBasicData:   make(chan []*data.Basicperf),
 		AverageRequest:     make(chan string),
-		AgentData:          make(chan map[string]map[int]interface{}),
-		LastPerfData:       make(chan map[int]interface{}),
+		AgentData:          make(chan *sync.Map),
+		LastPerfData:       make(chan *sync.Map),
 		AgentCopyDone:      make(chan bool),
 		LastperfCopyDone:   make(chan bool),
 		AgentInsertDone:    make(chan bool),
@@ -116,12 +105,41 @@ func getOntuneinfo(dbtype string) []interface{} {
 	return parameters
 }
 
-func contains(str string) bool {
-	if _, ok := AgentDataProcess[str]; ok {
+func contains(key any) bool {
+	if _, ok := AgentDataProcess.Load(key); ok {
 		return true
 	} else {
-		AgentDataProcess[str] = struct{}{}
+		AgentDataProcess.Store(key, struct{}{})
 		//LogWrite("log", fmt.Sprintf("make %s", str))
 		return false
 	}
+}
+
+func getMapSize(src *sync.Map) int {
+	var size int
+	src.Range(func(key, value any) bool {
+		size += 1
+		return true
+	})
+
+	return size
+}
+
+func CopyAgentMap(src *sync.Map) *sync.Map {
+	tgt := sync.Map{}
+	src.Range(func(key, value any) bool {
+		tgt.Store(key, CopyMap(value.(*sync.Map)))
+		return true
+	})
+
+	return &tgt
+}
+
+func CopyMap(src *sync.Map) *sync.Map {
+	tgt := sync.Map{}
+	src.Range(func(key, value any) bool {
+		tgt.Store(key, value)
+		return true
+	})
+	return &tgt
 }

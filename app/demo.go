@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"mgr/data"
+	"sync"
 	"time"
 )
 
@@ -13,12 +14,12 @@ type DemoHandler struct {
 	Interval     int
 	Agentinfo    data.AgentinfoArr
 	Hostinfo     data.HostinfoArr
-	AvgBasicPerf map[int][]*data.Basicperf
+	AvgBasicPerf *sync.Map
 }
 
 func (d *DemoHandler) Init(hostcount int) {
 	d.Hostcount = hostcount
-	d.AvgBasicPerf = make(map[int][]*data.Basicperf)
+	d.AvgBasicPerf = &sync.Map{}
 
 }
 
@@ -99,8 +100,7 @@ func (d *DemoHandler) GenerateBasicPerf(interval ConfigScrape) {
 	for {
 		ts := time.Now().Unix()
 
-		GlobalMutex.DemoAvgBasicM.Lock()
-		var agent_basicperf []data.Basicperf = make([]data.Basicperf, 0)
+		var agent_basicperf []*data.Basicperf = make([]*data.Basicperf, 0)
 		for i := 0; i < d.Hostcount; i++ {
 			demo_data := &data.Basicperf{
 				Ontunetime:       ts,
@@ -163,14 +163,15 @@ func (d *DemoHandler) GenerateBasicPerf(interval ConfigScrape) {
 				Swapused_mb:      rand.Intn(100),
 				Dusm:             rand.Intn(100),
 			}
-			agent_basicperf = append(agent_basicperf, *demo_data)
+			agent_basicperf = append(agent_basicperf, demo_data)
 
-			if _, ok := d.AvgBasicPerf[demo_data.Agentid]; !ok {
-				d.AvgBasicPerf[demo_data.Agentid] = make([]*data.Basicperf, 0)
+			// Store Average Value
+			if val, ok := d.AvgBasicPerf.LoadOrStore(demo_data.Agentid, make([]*data.Basicperf, 0)); ok {
+				var avgvalue []*data.Basicperf = make([]*data.Basicperf, 0)
+				avgvalue = append(avgvalue, val.([]*data.Basicperf)...)
+				d.AvgBasicPerf.Store(demo_data.Agentid, avgvalue)
 			}
-			d.AvgBasicPerf[demo_data.Agentid] = append(d.AvgBasicPerf[demo_data.Agentid], demo_data)
 		}
-		GlobalMutex.DemoAvgBasicM.Unlock()
 
 		GlobalChannel.DemoBasicData <- agent_basicperf
 		time.Sleep(time.Second * time.Duration(interval.Rate))
@@ -178,137 +179,138 @@ func (d *DemoHandler) GenerateBasicPerf(interval ConfigScrape) {
 }
 
 func (d *DemoHandler) GenerateAvgBasicPerf() {
-	var agent_basicperf []data.Basicperf = make([]data.Basicperf, 0)
+	var agent_basicperf []*data.Basicperf = make([]*data.Basicperf, 0)
 
-	GlobalMutex.DemoAvgBasicM.Lock()
-	for aid, adata := range d.AvgBasicPerf {
+	d.AvgBasicPerf.Range(func(key, value any) bool {
 		avg_data := &data.Basicperf{
-			Agentid: aid,
+			Agentid: key.(int),
 		}
-		for _, aadata := range adata {
-			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(aadata.Ontunetime)))
-			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(aadata.Ontunetime)))
-			avg_data.User = avg_data.User + aadata.User
-			avg_data.Sys = avg_data.Sys + aadata.Sys
-			avg_data.Wait = avg_data.Wait + aadata.Wait
-			avg_data.Idle = avg_data.Idle + aadata.Idle
-			avg_data.Processorcount = avg_data.Processorcount + aadata.Processorcount
-			avg_data.Runqueue = avg_data.Runqueue + aadata.Runqueue
-			avg_data.Blockqueue = avg_data.Blockqueue + aadata.Blockqueue
-			avg_data.Waitqueue = avg_data.Waitqueue + aadata.Waitqueue
-			avg_data.Pqueue = avg_data.Pqueue + aadata.Pqueue
-			avg_data.Pcrateuser = avg_data.Pcrateuser + aadata.Pcrateuser
-			avg_data.Pcratesys = avg_data.Pcratesys + aadata.Pcratesys
-			avg_data.Memorysize = avg_data.Memorysize + aadata.Memorysize
-			avg_data.Memoryused = avg_data.Memoryused + aadata.Memoryused
-			avg_data.Memorypinned = avg_data.Memorypinned + aadata.Memorypinned
-			avg_data.Memorysys = avg_data.Memorysys + aadata.Memorysys
-			avg_data.Memoryuser = avg_data.Memoryuser + aadata.Memoryuser
-			avg_data.Memorycache = avg_data.Memorycache + aadata.Memorycache
-			avg_data.Avm = avg_data.Avm + aadata.Avm
-			avg_data.Pagingspacein = avg_data.Pagingspacein + aadata.Pagingspacein
-			avg_data.Pagingspaceout = avg_data.Pagingspaceout + aadata.Pagingspaceout
-			avg_data.Filesystemin = avg_data.Filesystemin + aadata.Filesystemin
-			avg_data.Filesystemout = avg_data.Filesystemout + aadata.Filesystemout
-			avg_data.Memoryscan = avg_data.Memoryscan + aadata.Memoryscan
-			avg_data.Memoryfreed = avg_data.Memoryfreed + aadata.Memoryfreed
-			avg_data.Swapsize = avg_data.Swapsize + aadata.Swapsize
-			avg_data.Swapused = avg_data.Swapused + aadata.Swapused
-			avg_data.Swapactive = avg_data.Swapactive + aadata.Swapactive
-			avg_data.Fork = avg_data.Fork + aadata.Fork
-			avg_data.Exec = avg_data.Exec + aadata.Exec
-			avg_data.Interupt = avg_data.Interupt + aadata.Interupt
-			avg_data.Systemcall = avg_data.Systemcall + aadata.Systemcall
-			avg_data.Contextswitch = avg_data.Contextswitch + aadata.Contextswitch
-			avg_data.Semaphore = avg_data.Semaphore + aadata.Semaphore
-			avg_data.Msg = avg_data.Msg + aadata.Msg
-			avg_data.Diskreadwrite = avg_data.Diskreadwrite + aadata.Diskreadwrite
-			avg_data.Diskiops = avg_data.Diskiops + aadata.Diskiops
-			avg_data.Networkreadwrite = avg_data.Networkreadwrite + aadata.Networkreadwrite
-			avg_data.Networkiops = avg_data.Networkiops + aadata.Networkiops
-			avg_data.Topcommandid = avg_data.Topcommandid + aadata.Topcommandid
-			avg_data.Topcommandcount = avg_data.Topcommandcount + aadata.Topcommandcount
-			avg_data.Topuserid = avg_data.Topuserid + aadata.Topuserid
-			avg_data.Topcpu = avg_data.Topcpu + aadata.Topcpu
-			avg_data.Topdiskid = avg_data.Topdiskid + aadata.Topdiskid
-			avg_data.Topvgid = avg_data.Topvgid + aadata.Topvgid
-			avg_data.Topbusy = avg_data.Topbusy + aadata.Topbusy
-			avg_data.Maxpid = avg_data.Maxpid + aadata.Maxpid
-			avg_data.Threadcount = avg_data.Threadcount + aadata.Threadcount
-			avg_data.Pidcount = avg_data.Pidcount + aadata.Pidcount
-			avg_data.Linuxbuffer = avg_data.Linuxbuffer + aadata.Linuxbuffer
-			avg_data.Linuxcached = avg_data.Linuxcached + aadata.Linuxcached
-			avg_data.Linuxsrec = avg_data.Linuxsrec + aadata.Linuxsrec
-			avg_data.Memused_mb = avg_data.Memused_mb + aadata.Memused_mb
-			avg_data.Irq = avg_data.Irq + aadata.Irq
-			avg_data.Softirq = avg_data.Softirq + aadata.Softirq
-			avg_data.Swapused_mb = avg_data.Swapused_mb + aadata.Swapused_mb
-			avg_data.Dusm = avg_data.Dusm + aadata.Dusm
+		for _, av := range value.([]*data.Basicperf) {
+			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(av.Ontunetime)))
+			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(av.Ontunetime)))
+			avg_data.User = avg_data.User + av.User
+			avg_data.Sys = avg_data.Sys + av.Sys
+			avg_data.Wait = avg_data.Wait + av.Wait
+			avg_data.Idle = avg_data.Idle + av.Idle
+			avg_data.Processorcount = avg_data.Processorcount + av.Processorcount
+			avg_data.Runqueue = avg_data.Runqueue + av.Runqueue
+			avg_data.Blockqueue = avg_data.Blockqueue + av.Blockqueue
+			avg_data.Waitqueue = avg_data.Waitqueue + av.Waitqueue
+			avg_data.Pqueue = avg_data.Pqueue + av.Pqueue
+			avg_data.Pcrateuser = avg_data.Pcrateuser + av.Pcrateuser
+			avg_data.Pcratesys = avg_data.Pcratesys + av.Pcratesys
+			avg_data.Memorysize = avg_data.Memorysize + av.Memorysize
+			avg_data.Memoryused = avg_data.Memoryused + av.Memoryused
+			avg_data.Memorypinned = avg_data.Memorypinned + av.Memorypinned
+			avg_data.Memorysys = avg_data.Memorysys + av.Memorysys
+			avg_data.Memoryuser = avg_data.Memoryuser + av.Memoryuser
+			avg_data.Memorycache = avg_data.Memorycache + av.Memorycache
+			avg_data.Avm = avg_data.Avm + av.Avm
+			avg_data.Pagingspacein = avg_data.Pagingspacein + av.Pagingspacein
+			avg_data.Pagingspaceout = avg_data.Pagingspaceout + av.Pagingspaceout
+			avg_data.Filesystemin = avg_data.Filesystemin + av.Filesystemin
+			avg_data.Filesystemout = avg_data.Filesystemout + av.Filesystemout
+			avg_data.Memoryscan = avg_data.Memoryscan + av.Memoryscan
+			avg_data.Memoryfreed = avg_data.Memoryfreed + av.Memoryfreed
+			avg_data.Swapsize = avg_data.Swapsize + av.Swapsize
+			avg_data.Swapused = avg_data.Swapused + av.Swapused
+			avg_data.Swapactive = avg_data.Swapactive + av.Swapactive
+			avg_data.Fork = avg_data.Fork + av.Fork
+			avg_data.Exec = avg_data.Exec + av.Exec
+			avg_data.Interupt = avg_data.Interupt + av.Interupt
+			avg_data.Systemcall = avg_data.Systemcall + av.Systemcall
+			avg_data.Contextswitch = avg_data.Contextswitch + av.Contextswitch
+			avg_data.Semaphore = avg_data.Semaphore + av.Semaphore
+			avg_data.Msg = avg_data.Msg + av.Msg
+			avg_data.Diskreadwrite = avg_data.Diskreadwrite + av.Diskreadwrite
+			avg_data.Diskiops = avg_data.Diskiops + av.Diskiops
+			avg_data.Networkreadwrite = avg_data.Networkreadwrite + av.Networkreadwrite
+			avg_data.Networkiops = avg_data.Networkiops + av.Networkiops
+			avg_data.Topcommandid = avg_data.Topcommandid + av.Topcommandid
+			avg_data.Topcommandcount = avg_data.Topcommandcount + av.Topcommandcount
+			avg_data.Topuserid = avg_data.Topuserid + av.Topuserid
+			avg_data.Topcpu = avg_data.Topcpu + av.Topcpu
+			avg_data.Topdiskid = avg_data.Topdiskid + av.Topdiskid
+			avg_data.Topvgid = avg_data.Topvgid + av.Topvgid
+			avg_data.Topbusy = avg_data.Topbusy + av.Topbusy
+			avg_data.Maxpid = avg_data.Maxpid + av.Maxpid
+			avg_data.Threadcount = avg_data.Threadcount + av.Threadcount
+			avg_data.Pidcount = avg_data.Pidcount + av.Pidcount
+			avg_data.Linuxbuffer = avg_data.Linuxbuffer + av.Linuxbuffer
+			avg_data.Linuxcached = avg_data.Linuxcached + av.Linuxcached
+			avg_data.Linuxsrec = avg_data.Linuxsrec + av.Linuxsrec
+			avg_data.Memused_mb = avg_data.Memused_mb + av.Memused_mb
+			avg_data.Irq = avg_data.Irq + av.Irq
+			avg_data.Softirq = avg_data.Softirq + av.Softirq
+			avg_data.Swapused_mb = avg_data.Swapused_mb + av.Swapused_mb
+			avg_data.Dusm = avg_data.Dusm + av.Dusm
 		}
-		avg_data.User = avg_data.User / len(adata)
-		avg_data.Sys = avg_data.Sys / len(adata)
-		avg_data.Wait = avg_data.Wait / len(adata)
-		avg_data.Idle = avg_data.Idle / len(adata)
-		avg_data.Processorcount = avg_data.Processorcount / len(adata)
-		avg_data.Runqueue = avg_data.Runqueue / len(adata)
-		avg_data.Blockqueue = avg_data.Blockqueue / len(adata)
-		avg_data.Waitqueue = avg_data.Waitqueue / len(adata)
-		avg_data.Pqueue = avg_data.Pqueue / len(adata)
-		avg_data.Pcrateuser = avg_data.Pcrateuser / len(adata)
-		avg_data.Pcratesys = avg_data.Pcratesys / len(adata)
-		avg_data.Memorysize = avg_data.Memorysize / len(adata)
-		avg_data.Memoryused = avg_data.Memoryused / len(adata)
-		avg_data.Memorypinned = avg_data.Memorypinned / len(adata)
-		avg_data.Memorysys = avg_data.Memorysys / len(adata)
-		avg_data.Memoryuser = avg_data.Memoryuser / len(adata)
-		avg_data.Memorycache = avg_data.Memorycache / len(adata)
-		avg_data.Avm = avg_data.Avm / len(adata)
-		avg_data.Pagingspacein = avg_data.Pagingspacein / len(adata)
-		avg_data.Pagingspaceout = avg_data.Pagingspaceout / len(adata)
-		avg_data.Filesystemin = avg_data.Filesystemin / len(adata)
-		avg_data.Filesystemout = avg_data.Filesystemout / len(adata)
-		avg_data.Memoryscan = avg_data.Memoryscan / len(adata)
-		avg_data.Memoryfreed = avg_data.Memoryfreed / len(adata)
-		avg_data.Swapsize = avg_data.Swapsize / len(adata)
-		avg_data.Swapused = avg_data.Swapused / len(adata)
-		avg_data.Swapactive = avg_data.Swapactive / len(adata)
-		avg_data.Fork = avg_data.Fork / len(adata)
-		avg_data.Exec = avg_data.Exec / len(adata)
-		avg_data.Interupt = avg_data.Interupt / len(adata)
-		avg_data.Systemcall = avg_data.Systemcall / len(adata)
-		avg_data.Contextswitch = avg_data.Contextswitch / len(adata)
-		avg_data.Semaphore = avg_data.Semaphore / len(adata)
-		avg_data.Msg = avg_data.Msg / len(adata)
-		avg_data.Diskreadwrite = avg_data.Diskreadwrite / len(adata)
-		avg_data.Diskiops = avg_data.Diskiops / len(adata)
-		avg_data.Networkreadwrite = avg_data.Networkreadwrite / len(adata)
-		avg_data.Networkiops = avg_data.Networkiops / len(adata)
-		avg_data.Topcommandid = avg_data.Topcommandid / len(adata)
-		avg_data.Topcommandcount = avg_data.Topcommandcount / len(adata)
-		avg_data.Topuserid = avg_data.Topuserid / len(adata)
-		avg_data.Topcpu = avg_data.Topcpu / len(adata)
-		avg_data.Topdiskid = avg_data.Topdiskid / len(adata)
-		avg_data.Topvgid = avg_data.Topvgid / len(adata)
-		avg_data.Topbusy = avg_data.Topbusy / len(adata)
-		avg_data.Maxpid = avg_data.Maxpid / len(adata)
-		avg_data.Threadcount = avg_data.Threadcount / len(adata)
-		avg_data.Pidcount = avg_data.Pidcount / len(adata)
-		avg_data.Linuxbuffer = avg_data.Linuxbuffer / len(adata)
-		avg_data.Linuxcached = avg_data.Linuxcached / len(adata)
-		avg_data.Linuxsrec = avg_data.Linuxsrec / len(adata)
-		avg_data.Memused_mb = avg_data.Memused_mb / len(adata)
-		avg_data.Irq = avg_data.Irq / len(adata)
-		avg_data.Softirq = avg_data.Softirq / len(adata)
-		avg_data.Swapused_mb = avg_data.Swapused_mb / len(adata)
-		avg_data.Dusm = avg_data.Dusm / len(adata)
+		if value_len := len(value.([]*data.Basicperf)); value_len > 0 {
+			avg_data.User = avg_data.User / value_len
+			avg_data.Sys = avg_data.Sys / value_len
+			avg_data.Wait = avg_data.Wait / value_len
+			avg_data.Idle = avg_data.Idle / value_len
+			avg_data.Processorcount = avg_data.Processorcount / value_len
+			avg_data.Runqueue = avg_data.Runqueue / value_len
+			avg_data.Blockqueue = avg_data.Blockqueue / value_len
+			avg_data.Waitqueue = avg_data.Waitqueue / value_len
+			avg_data.Pqueue = avg_data.Pqueue / value_len
+			avg_data.Pcrateuser = avg_data.Pcrateuser / value_len
+			avg_data.Pcratesys = avg_data.Pcratesys / value_len
+			avg_data.Memorysize = avg_data.Memorysize / value_len
+			avg_data.Memoryused = avg_data.Memoryused / value_len
+			avg_data.Memorypinned = avg_data.Memorypinned / value_len
+			avg_data.Memorysys = avg_data.Memorysys / value_len
+			avg_data.Memoryuser = avg_data.Memoryuser / value_len
+			avg_data.Memorycache = avg_data.Memorycache / value_len
+			avg_data.Avm = avg_data.Avm / value_len
+			avg_data.Pagingspacein = avg_data.Pagingspacein / value_len
+			avg_data.Pagingspaceout = avg_data.Pagingspaceout / value_len
+			avg_data.Filesystemin = avg_data.Filesystemin / value_len
+			avg_data.Filesystemout = avg_data.Filesystemout / value_len
+			avg_data.Memoryscan = avg_data.Memoryscan / value_len
+			avg_data.Memoryfreed = avg_data.Memoryfreed / value_len
+			avg_data.Swapsize = avg_data.Swapsize / value_len
+			avg_data.Swapused = avg_data.Swapused / value_len
+			avg_data.Swapactive = avg_data.Swapactive / value_len
+			avg_data.Fork = avg_data.Fork / value_len
+			avg_data.Exec = avg_data.Exec / value_len
+			avg_data.Interupt = avg_data.Interupt / value_len
+			avg_data.Systemcall = avg_data.Systemcall / value_len
+			avg_data.Contextswitch = avg_data.Contextswitch / value_len
+			avg_data.Semaphore = avg_data.Semaphore / value_len
+			avg_data.Msg = avg_data.Msg / value_len
+			avg_data.Diskreadwrite = avg_data.Diskreadwrite / value_len
+			avg_data.Diskiops = avg_data.Diskiops / value_len
+			avg_data.Networkreadwrite = avg_data.Networkreadwrite / value_len
+			avg_data.Networkiops = avg_data.Networkiops / value_len
+			avg_data.Topcommandid = avg_data.Topcommandid / value_len
+			avg_data.Topcommandcount = avg_data.Topcommandcount / value_len
+			avg_data.Topuserid = avg_data.Topuserid / value_len
+			avg_data.Topcpu = avg_data.Topcpu / value_len
+			avg_data.Topdiskid = avg_data.Topdiskid / value_len
+			avg_data.Topvgid = avg_data.Topvgid / value_len
+			avg_data.Topbusy = avg_data.Topbusy / value_len
+			avg_data.Maxpid = avg_data.Maxpid / value_len
+			avg_data.Threadcount = avg_data.Threadcount / value_len
+			avg_data.Pidcount = avg_data.Pidcount / value_len
+			avg_data.Linuxbuffer = avg_data.Linuxbuffer / value_len
+			avg_data.Linuxcached = avg_data.Linuxcached / value_len
+			avg_data.Linuxsrec = avg_data.Linuxsrec / value_len
+			avg_data.Memused_mb = avg_data.Memused_mb / value_len
+			avg_data.Irq = avg_data.Irq / value_len
+			avg_data.Softirq = avg_data.Softirq / value_len
+			avg_data.Swapused_mb = avg_data.Swapused_mb / value_len
+			avg_data.Dusm = avg_data.Dusm / value_len
+		}
+		agent_basicperf = append(agent_basicperf, avg_data)
 
-		agent_basicperf = append(agent_basicperf, *avg_data)
-	}
+		return true
+	})
 
 	GlobalChannel.DemoAvgBasicData <- agent_basicperf
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgBasicPerf = make(map[int][]*data.Basicperf)
-	GlobalMutex.DemoAvgBasicM.Unlock()
+	d.AvgBasicPerf = &sync.Map{}
 }

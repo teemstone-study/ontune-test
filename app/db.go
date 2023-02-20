@@ -177,37 +177,42 @@ func (d *DBHandler) UpdateOntuneinfo() {
 
 func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, idx int) {
 	agent_data.Range(func(key, value any) bool {
-		var val map[int]interface{} = value.(map[int]interface{})
-
-		if value == nil || len(val) == 0 {
-			return true
-		}
-
 		if key == "lastperf" || key == "lastrealtimeperf" {
 			return true
 		}
 
-		LogWrite("log", fmt.Sprintf("realtime start %d %s %s %d", idx, key, d.dbtype, GlobalOntunetime))
+		val := value.(*sync.Map)
+		if value == nil || contains(key) || getMapSize(val) == 0 {
+			return true
+		}
+
+		// Copy and Init
+		insert_agent_data := CopyMap(val)
+		agent_data.Store(key, &sync.Map{})
 
 		k := key.(string)
 		if len(k) >= 12 && k[:12] == "realtimeperf" {
 			var realtimeperf_arr data.BasicperfArr = data.BasicperfArr{}
-			for _, adata := range val {
-				agent_struct_data := adata.(data.Basicperf)
-				realtimeperf_arr.SetData(agent_struct_data)
-			}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Basicperf)
+				realtimeperf_arr.SetData(*agent_struct_data)
+
+				return true
+			})
 
 			tx := d.db.MustBegin()
 			args := realtimeperf_arr.GetArgs(d.dbtype)
 
-			if d.dbtype == "pg" {
-				tx.MustExec(fmt.Sprintf(data.InsertRealtimeperfPg, d.getMetricTableName("realtimeperf", false)), args...)
-			} else if d.dbtype == "ts" {
-				tx.MustExec(fmt.Sprintf(data.InsertRealtimeperfTs, d.getMetricTableName("realtimeperf", false)), args...)
+			if getMapSize(val) > 0 {
+				if d.dbtype == "pg" {
+					tx.MustExec(fmt.Sprintf(data.InsertRealtimeperfPg, d.getMetricTableName("realtimeperf", false)), args...)
+				} else if d.dbtype == "ts" {
+					tx.MustExec(fmt.Sprintf(data.InsertRealtimeperfTs, d.getMetricTableName("realtimeperf", false)), args...)
+				}
+				err := tx.Commit()
+				ErrorTx(err, tx)
+				LogWrite("log", fmt.Sprintf("realtime %d %s %s %d %d", idx, k, d.dbtype, len(realtimeperf_arr.Ontunetime), GlobalOntunetime))
 			}
-			err := tx.Commit()
-			LogWrite("log", fmt.Sprintf("realtime %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
-			ErrorTx(err, tx)
 
 		} else if len(k) >= 12 && k[:12] == "realtimeproc" {
 			fmt.Println("proc")
@@ -217,10 +222,12 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 			fmt.Println("cpu")
 		} else if len(k) >= 7 && k[:7] == "avgperf" {
 			var avgperf_arr data.BasicperfArr = data.BasicperfArr{}
-			for _, adata := range val {
-				agent_struct_data := adata.(data.Basicperf)
-				avgperf_arr.SetData(agent_struct_data)
-			}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Basicperf)
+				avgperf_arr.SetData(*agent_struct_data)
+
+				return true
+			})
 
 			tx := d.db.MustBegin()
 
@@ -234,7 +241,6 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 			ErrorTx(err, tx)
 		}
 
-		agent_data.Store(key, make(map[int]interface{}))
 		time.Sleep(time.Millisecond * time.Duration(1))
 		return true
 	})
@@ -248,18 +254,14 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 	}()
 }
 
-func (d *DBHandler) InsertLastPerfData(agent_data map[int]interface{}, wg *sync.WaitGroup) {
-	// Deep Copy
-	insert_data := make(map[int]interface{})
-	for k, v := range agent_data {
-		insert_data[k] = v
-	}
-
+func (d *DBHandler) InsertLastPerfData(agent_data *sync.Map, wg *sync.WaitGroup) {
 	var lastperf_arr data.LastperfArr = data.LastperfArr{}
-	for _, ad := range insert_data {
-		lpdata := ad.(data.Lastperf)
-		lastperf_arr.SetData(lpdata)
-	}
+	agent_data.Range(func(key, value any) bool {
+		lpdata := value.(*data.Lastperf)
+		lastperf_arr.SetData(*lpdata)
+
+		return true
+	})
 
 	tx := d.db.MustBegin()
 	tx.MustExec(data.TruncateLastperf)
@@ -271,22 +273,23 @@ func (d *DBHandler) InsertLastPerfData(agent_data map[int]interface{}, wg *sync.
 	defer wg.Done()
 }
 
-func (d *DBHandler) InsertLastRealtimePerfData(agent_data map[int]interface{}, wg *sync.WaitGroup) {
-	var lastrealtimeperf_arr data.LastrealtimeperfArr = data.LastrealtimeperfArr{}
+func (d *DBHandler) InsertLastRealtimePerfData(agent_data *sync.Map, wg *sync.WaitGroup) {
+	if lrtp_data, ok := agent_data.Load("lastrealtimeperf"); ok && getMapSize(lrtp_data.(*sync.Map)) > 0 {
+		var lastrealtimeperf_arr data.LastrealtimeperfArr = data.LastrealtimeperfArr{}
+		lrtp_data.(*sync.Map).Range(func(key, value any) bool {
+			lrtpdata := value.(*data.Lastrealtimeperf)
+			lastrealtimeperf_arr.SetData(*lrtpdata)
 
-	for _, ad := range agent_data {
-		lrtpdata := ad.(data.Lastrealtimeperf)
-		lastrealtimeperf_arr.SetData(lrtpdata)
+			return true
+		})
+
+		tx := d.db.MustBegin()
+		tx.MustExec(data.TruncateLastrealtimeperf)
+		tx.MustExec(data.InsertLastrealtimeperf, lastrealtimeperf_arr.GetArgs()...)
+		err := tx.Commit()
+		//LogWrite("log", fmt.Sprintf("lrtp %s %d", d.dbtype, GlobalOntunetime))
+		ErrorTx(err, tx)
 	}
-
-	tx := d.db.MustBegin()
-	tx.MustExec(data.TruncateLastrealtimeperf)
-	tx.MustExec(data.InsertLastrealtimeperf, lastrealtimeperf_arr.GetArgs()...)
-	err := tx.Commit()
-	LogWrite("log", fmt.Sprintf("lrtp %s %d", d.dbtype, GlobalOntunetime))
-	ErrorTx(err, tx)
-
-	time.Sleep(time.Millisecond * time.Duration(1))
 	//LogWrite("log", "waitgroup -1")
 	defer wg.Done()
 }

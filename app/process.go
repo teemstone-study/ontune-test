@@ -4,12 +4,13 @@ import (
 	"math"
 	"mgr/data"
 	"strconv"
+	"sync"
 	"time"
 )
 
 type ProcessHandler struct {
 	AgentTableNames []map[string]string
-	AgentData       map[string]map[int]interface{}
+	AgentData       *sync.Map
 	Ontunetime      int64
 	LPtime          int64
 	LPCount         int
@@ -27,37 +28,8 @@ func (a *ProcessHandler) Init() {
 	a.AvgIotime = time.Now().Unix()
 	a.AvgCputime = time.Now().Unix()
 
-	a.AgentData = make(map[string]map[int]interface{})
+	a.AgentData = &sync.Map{}
 	a.InitTableNames()
-
-	InitMap(&a.AgentData)
-}
-
-func InitMap(m *map[string]map[int]interface{}) {
-	(*m)["lastrealtimeperf"] = make(map[int]interface{})
-	(*m)["lastperf"] = make(map[int]interface{})
-
-	(*m)["realtimeperf1"] = make(map[int]interface{})
-	(*m)["realtimeperf2"] = make(map[int]interface{})
-	(*m)["realtimeperf3"] = make(map[int]interface{})
-	(*m)["realtimeperf4"] = make(map[int]interface{})
-	(*m)["realtimeperf5"] = make(map[int]interface{})
-	(*m)["realtimeperf6"] = make(map[int]interface{})
-	(*m)["realtimeperf7"] = make(map[int]interface{})
-	(*m)["realtimeperf8"] = make(map[int]interface{})
-	(*m)["realtimeperf9"] = make(map[int]interface{})
-	(*m)["realtimeperf0"] = make(map[int]interface{})
-
-	(*m)["avgperf1"] = make(map[int]interface{})
-	(*m)["avgperf2"] = make(map[int]interface{})
-	(*m)["avgperf3"] = make(map[int]interface{})
-	(*m)["avgperf4"] = make(map[int]interface{})
-	(*m)["avgperf5"] = make(map[int]interface{})
-	(*m)["avgperf6"] = make(map[int]interface{})
-	(*m)["avgperf7"] = make(map[int]interface{})
-	(*m)["avgperf8"] = make(map[int]interface{})
-	(*m)["avgperf9"] = make(map[int]interface{})
-	(*m)["avgperf0"] = make(map[int]interface{})
 }
 
 func (a *ProcessHandler) InitTableNames() {
@@ -70,29 +42,26 @@ func (a *ProcessHandler) InitTableNames() {
 	}
 }
 
-func (a *ProcessHandler) ReceiveBasicPerf(perf_data []data.Basicperf) {
-	GlobalMutex.ProcDataM.Lock()
+func (a *ProcessHandler) ReceiveBasicPerf(perf_data []*data.Basicperf) {
 	for _, p := range perf_data {
 		tablename := a.AgentTableNames[p.Agentid%10]["realtimeperf"]
-		if _, ok := a.AgentData[tablename][p.Agentid]; !ok {
-			a.AgentData[tablename][p.Agentid] = data.Basicperf{}
+		if val, ok := a.AgentData.LoadOrStore(tablename, &sync.Map{}); ok {
+			val.(*sync.Map).Store(p.Agentid, p)
 		}
-		a.AgentData[tablename][p.Agentid] = p
 
 		a.SetLastrealtimeperf("basic", p)
 		a.SetLastperf(p)
 	}
-	GlobalMutex.ProcDataM.Unlock()
 	a.LPCount = a.LPCount + 1
 }
 
-func (a *ProcessHandler) ReceiveAvgBasicPerf(perf_data []data.Basicperf) {
-	GlobalMutex.ProcDataM.Lock()
+func (a *ProcessHandler) ReceiveAvgBasicPerf(perf_data []*data.Basicperf) {
 	for _, p := range perf_data {
 		tablename := a.AgentTableNames[p.Agentid%10]["avgperf"]
-		a.AgentData[tablename][p.Agentid] = p
+		if val, ok := a.AgentData.LoadOrStore(tablename, &sync.Map{}); ok {
+			val.(*sync.Map).Store(p.Agentid, p)
+		}
 	}
-	GlobalMutex.ProcDataM.Unlock()
 }
 
 func (a *ProcessHandler) SetLastrealtimeperf(item_type string, agent_data interface{}) {
@@ -100,77 +69,75 @@ func (a *ProcessHandler) SetLastrealtimeperf(item_type string, agent_data interf
 
 	switch item_type {
 	case "basic":
-		src := agent_data.(data.Basicperf)
-		if _, ok := a.AgentData[tablename][src.Agentid]; !ok {
-			a.AgentData[tablename][src.Agentid] = data.Lastrealtimeperf{}
+		src := agent_data.(*data.Basicperf)
+		if aval, aok := a.AgentData.LoadOrStore(tablename, &sync.Map{}); aok {
+			if val, ok := aval.(*sync.Map).LoadOrStore(src.Agentid, &data.Lastrealtimeperf{}); ok {
+				tgt := val.(*data.Lastrealtimeperf)
+
+				// Overwrite
+				tgt.Ontunetime = src.Ontunetime
+				tgt.Agentid = src.Agentid
+				tgt.Hostname = MapHostifo[src.Agentid]
+				tgt.User = src.User
+				tgt.Sys = src.Sys
+				tgt.Wait = src.Wait
+				tgt.Idle = src.Idle
+				tgt.Memoryused = src.Memoryused
+				tgt.Filecache = src.Memorycache
+				tgt.Memorysize = src.Memorysize
+				tgt.Avm = src.Avm
+				tgt.Swapused = src.Swapused
+				tgt.Swapsize = src.Swapsize
+				tgt.Topcpu = src.Topcpu
+				tgt.Topbusy = src.Topbusy
+				tgt.Diskiops = src.Diskiops
+				tgt.Networkiops = src.Networkiops
+			}
 		}
-		tgt := a.AgentData[tablename][src.Agentid].(data.Lastrealtimeperf)
-
-		// Overwrite
-		tgt.Ontunetime = src.Ontunetime
-		tgt.Agentid = src.Agentid
-		tgt.Hostname = MapHostifo[src.Agentid]
-		tgt.User = src.User
-		tgt.Sys = src.Sys
-		tgt.Wait = src.Wait
-		tgt.Idle = src.Idle
-		tgt.Memoryused = src.Memoryused
-		tgt.Filecache = src.Memorycache
-		tgt.Memorysize = src.Memorysize
-		tgt.Avm = src.Avm
-		tgt.Swapused = src.Swapused
-		tgt.Swapsize = src.Swapsize
-		tgt.Topcpu = src.Topcpu
-		tgt.Topbusy = src.Topbusy
-		tgt.Diskiops = src.Diskiops
-		tgt.Networkiops = src.Networkiops
-
-		a.AgentData[tablename][src.Agentid] = tgt
 	}
 }
 
 func (a *ProcessHandler) SetLastperf(agent_data interface{}) {
 	tablename := "lastperf"
 
-	src := agent_data.(data.Basicperf)
-	if _, ok := a.AgentData[tablename][src.Agentid]; !ok {
-		a.AgentData[tablename][src.Agentid] = data.Lastperf{}
+	src := agent_data.(*data.Basicperf)
+	if aval, aok := a.AgentData.LoadOrStore(tablename, &sync.Map{}); aok {
+		if val, ok := aval.(*sync.Map).LoadOrStore(src.Agentid, &data.Lastperf{}); ok {
+			tgt := val.(*data.Lastperf)
+
+			// Add and Replace
+			tgt.Ontunetime = int64(math.Max(float64(tgt.Ontunetime), float64(src.Ontunetime)))
+			tgt.Hostname = MapHostifo[src.Agentid]
+			tgt.User = tgt.User + src.User
+			tgt.Sys = tgt.Sys + src.Sys
+			tgt.Wait = tgt.Wait + src.Wait
+			tgt.Idle = tgt.Idle + src.Idle
+			tgt.Avm = tgt.Avm + src.Avm
+			tgt.Memoryused = tgt.Memoryused + src.Memoryused
+			tgt.Filecache = tgt.Filecache + src.Memorycache
+			tgt.Swapused = tgt.Swapused + src.Swapused
+			tgt.Topcpu = tgt.Topcpu + src.Topcpu
+			tgt.Topbusy = tgt.Topbusy + src.Topbusy
+			tgt.Runqueue = tgt.Runqueue + src.Runqueue
+			tgt.Blockqueue = tgt.Blockqueue + src.Blockqueue
+			tgt.Pagingspacein = tgt.Pagingspacein + src.Pagingspacein
+			tgt.Pagingspaceout = tgt.Pagingspaceout + src.Pagingspaceout
+			tgt.Filesystemin = tgt.Filesystemin + src.Filesystemin
+			tgt.Filesystemout = tgt.Filesystemout + src.Filesystemout
+			tgt.Memoryscan = tgt.Memoryscan + src.Memoryscan
+			tgt.Memoryfreed = tgt.Memoryfreed + src.Memoryfreed
+			tgt.Swapactive = tgt.Swapactive + src.Swapactive
+			tgt.Fork = tgt.Fork + src.Fork
+			tgt.Exec = tgt.Exec + src.Exec
+			tgt.Interupt = tgt.Interupt + src.Interupt
+			tgt.Systemcall = tgt.Systemcall + src.Systemcall
+			tgt.Contextswitch = tgt.Contextswitch + src.Contextswitch
+			tgt.Semaphore = tgt.Semaphore + src.Semaphore
+			tgt.Msg = tgt.Msg + src.Msg
+			tgt.Diskiops = tgt.Diskiops + src.Diskiops
+			tgt.Networkiops = tgt.Networkiops + src.Networkiops
+		}
 	}
-	tgt := a.AgentData[tablename][src.Agentid].(data.Lastperf)
-
-	// Add and Replace
-	tgt.Ontunetime = int64(math.Max(float64(tgt.Ontunetime), float64(src.Ontunetime)))
-	tgt.Hostname = MapHostifo[src.Agentid]
-	tgt.User = tgt.User + src.User
-	tgt.Sys = tgt.Sys + src.Sys
-	tgt.Wait = tgt.Wait + src.Wait
-	tgt.Idle = tgt.Idle + src.Idle
-	tgt.Avm = tgt.Avm + src.Avm
-	tgt.Memoryused = tgt.Memoryused + src.Memoryused
-	tgt.Filecache = tgt.Filecache + src.Memorycache
-	tgt.Swapused = tgt.Swapused + src.Swapused
-	tgt.Topcpu = tgt.Topcpu + src.Topcpu
-	tgt.Topbusy = tgt.Topbusy + src.Topbusy
-	tgt.Runqueue = tgt.Runqueue + src.Runqueue
-	tgt.Blockqueue = tgt.Blockqueue + src.Blockqueue
-	tgt.Pagingspacein = tgt.Pagingspacein + src.Pagingspacein
-	tgt.Pagingspaceout = tgt.Pagingspaceout + src.Pagingspaceout
-	tgt.Filesystemin = tgt.Filesystemin + src.Filesystemin
-	tgt.Filesystemout = tgt.Filesystemout + src.Filesystemout
-	tgt.Memoryscan = tgt.Memoryscan + src.Memoryscan
-	tgt.Memoryfreed = tgt.Memoryfreed + src.Memoryfreed
-	tgt.Swapactive = tgt.Swapactive + src.Swapactive
-	tgt.Fork = tgt.Fork + src.Fork
-	tgt.Exec = tgt.Exec + src.Exec
-	tgt.Interupt = tgt.Interupt + src.Interupt
-	tgt.Systemcall = tgt.Systemcall + src.Systemcall
-	tgt.Contextswitch = tgt.Contextswitch + src.Contextswitch
-	tgt.Semaphore = tgt.Semaphore + src.Semaphore
-	tgt.Msg = tgt.Msg + src.Msg
-	tgt.Diskiops = tgt.Diskiops + src.Diskiops
-	tgt.Networkiops = tgt.Networkiops + src.Networkiops
-
-	a.AgentData[tablename][src.Agentid] = tgt
 }
 
 func (a *ProcessHandler) ProcessData() {
@@ -178,15 +145,15 @@ func (a *ProcessHandler) ProcessData() {
 		newtime := time.Now().Unix()
 		if newtime >= a.LPtime+LASTPERF_TIMER {
 			a.ProcessLastperf()
-			GlobalChannel.LastPerfData <- a.AgentData["lastperf"]
-			a.LPtime = newtime
+			if val, ok := a.AgentData.LoadOrStore("lastperf", &sync.Map{}); ok {
+				GlobalChannel.LastPerfData <- val.(*sync.Map)
+				a.LPtime = newtime
+			}
 
 			// Lastperf Init
 			<-GlobalChannel.LastperfCopyDone
 			a.LPCount = 0
-			GlobalMutex.ProcDataM.Lock()
-			a.AgentData["lastperf"] = make(map[int]interface{})
-			GlobalMutex.ProcDataM.Unlock()
+			a.AgentData.Store("lastperf", &sync.Map{})
 
 			// DBInsert Process Done
 			<-GlobalChannel.LastperfInsertDone
@@ -200,15 +167,13 @@ func (a *ProcessHandler) ProcessData() {
 
 			// Realtime, AvgPerf Init
 			<-GlobalChannel.AgentCopyDone
-			GlobalMutex.ProcDataM.Lock()
 			for i := 0; i < 10; i++ {
 				realtimetablename := a.AgentTableNames[i]["realtimeperf"]
-				a.AgentData[realtimetablename] = make(map[int]interface{})
+				a.AgentData.Store(realtimetablename, &sync.Map{})
 
 				avgtablename := a.AgentTableNames[i]["avgperf"]
-				a.AgentData[avgtablename] = make(map[int]interface{})
+				a.AgentData.Store(avgtablename, &sync.Map{})
 			}
-			GlobalMutex.ProcDataM.Unlock()
 			<-GlobalChannel.AgentInsertDone
 		}
 		time.Sleep(time.Millisecond * time.Duration(1))
@@ -216,51 +181,44 @@ func (a *ProcessHandler) ProcessData() {
 }
 
 func (a *ProcessHandler) ProcessLastperf() {
-	if a.LPCount == 0 {
-		GlobalMutex.ProcDataM.Lock()
-		a.AgentData["lastperf"] = make(map[int]interface{})
-		GlobalMutex.ProcDataM.Unlock()
-		return
-	}
+	if agentdata, ok := a.AgentData.LoadOrStore("lastperf", &sync.Map{}); ok {
+		agentdata.(*sync.Map).Range(func(k, v any) bool {
+			lpdata := v.(*data.Lastperf)
+			lpdata.User = lpdata.User / a.LPCount
+			lpdata.Sys = lpdata.Sys / a.LPCount
+			lpdata.Wait = lpdata.Wait / a.LPCount
+			lpdata.Idle = lpdata.Idle / a.LPCount
+			lpdata.Avm = lpdata.Avm / a.LPCount
+			lpdata.Memoryused = lpdata.Memoryused / a.LPCount
+			lpdata.Filecache = lpdata.Filecache / a.LPCount
+			lpdata.Swapused = lpdata.Swapused / a.LPCount
+			lpdata.Diskiorate = lpdata.Diskiorate / a.LPCount
+			lpdata.Networkiorate = lpdata.Networkiorate / a.LPCount
+			lpdata.Topcpu = lpdata.Topcpu / a.LPCount
+			lpdata.Topbusy = lpdata.Topbusy / a.LPCount
+			lpdata.Runqueue = lpdata.Runqueue / a.LPCount
+			lpdata.Blockqueue = lpdata.Blockqueue / a.LPCount
+			lpdata.Pagingspacein = lpdata.Pagingspacein / a.LPCount
+			lpdata.Pagingspaceout = lpdata.Pagingspaceout / a.LPCount
+			lpdata.Filesystemin = lpdata.Filesystemin / a.LPCount
+			lpdata.Filesystemout = lpdata.Filesystemout / a.LPCount
+			lpdata.Memoryscan = lpdata.Memoryscan / a.LPCount
+			lpdata.Memoryfreed = lpdata.Memoryfreed / a.LPCount
+			lpdata.Swapactive = lpdata.Swapactive / a.LPCount
+			lpdata.Fork = lpdata.Fork / a.LPCount
+			lpdata.Exec = lpdata.Exec / a.LPCount
+			lpdata.Interupt = lpdata.Interupt / a.LPCount
+			lpdata.Systemcall = lpdata.Systemcall / a.LPCount
+			lpdata.Contextswitch = lpdata.Contextswitch / a.LPCount
+			lpdata.Semaphore = lpdata.Semaphore / a.LPCount
+			lpdata.Msg = lpdata.Msg / a.LPCount
+			lpdata.Diskiops = lpdata.Diskiops / a.LPCount
+			lpdata.Networkiops = lpdata.Networkiops / a.LPCount
+			lpdata.Networkreadrate = lpdata.Networkreadrate / a.LPCount
+			lpdata.Networkwriterate = lpdata.Networkwriterate / a.LPCount
 
-	for k, v := range a.AgentData["lastperf"] {
-		lpdata := v.(data.Lastperf)
-		lpdata.User = lpdata.User / a.LPCount
-		lpdata.Sys = lpdata.Sys / a.LPCount
-		lpdata.Wait = lpdata.Wait / a.LPCount
-		lpdata.Idle = lpdata.Idle / a.LPCount
-		lpdata.Avm = lpdata.Avm / a.LPCount
-		lpdata.Memoryused = lpdata.Memoryused / a.LPCount
-		lpdata.Filecache = lpdata.Filecache / a.LPCount
-		lpdata.Swapused = lpdata.Swapused / a.LPCount
-		lpdata.Diskiorate = lpdata.Diskiorate / a.LPCount
-		lpdata.Networkiorate = lpdata.Networkiorate / a.LPCount
-		lpdata.Topcpu = lpdata.Topcpu / a.LPCount
-		lpdata.Topbusy = lpdata.Topbusy / a.LPCount
-		lpdata.Runqueue = lpdata.Runqueue / a.LPCount
-		lpdata.Blockqueue = lpdata.Blockqueue / a.LPCount
-		lpdata.Pagingspacein = lpdata.Pagingspacein / a.LPCount
-		lpdata.Pagingspaceout = lpdata.Pagingspaceout / a.LPCount
-		lpdata.Filesystemin = lpdata.Filesystemin / a.LPCount
-		lpdata.Filesystemout = lpdata.Filesystemout / a.LPCount
-		lpdata.Memoryscan = lpdata.Memoryscan / a.LPCount
-		lpdata.Memoryfreed = lpdata.Memoryfreed / a.LPCount
-		lpdata.Swapactive = lpdata.Swapactive / a.LPCount
-		lpdata.Fork = lpdata.Fork / a.LPCount
-		lpdata.Exec = lpdata.Exec / a.LPCount
-		lpdata.Interupt = lpdata.Interupt / a.LPCount
-		lpdata.Systemcall = lpdata.Systemcall / a.LPCount
-		lpdata.Contextswitch = lpdata.Contextswitch / a.LPCount
-		lpdata.Semaphore = lpdata.Semaphore / a.LPCount
-		lpdata.Msg = lpdata.Msg / a.LPCount
-		lpdata.Diskiops = lpdata.Diskiops / a.LPCount
-		lpdata.Networkiops = lpdata.Networkiops / a.LPCount
-		lpdata.Networkreadrate = lpdata.Networkreadrate / a.LPCount
-		lpdata.Networkwriterate = lpdata.Networkwriterate / a.LPCount
-
-		GlobalMutex.ProcDataM.Lock()
-		a.AgentData["lastperf"][k] = lpdata
-		GlobalMutex.ProcDataM.Unlock()
+			return true
+		})
 	}
 }
 
