@@ -21,12 +21,13 @@ type DBHandler struct {
 var (
 	info_tables          = []string{"tableinfo", "ontuneinfo", "agentinfo", "hostinfo"}
 	metric_single_tables = []string{"lastrealtimeperf", "lastperf", "deviceid", "descid"}
-	//metric_ref_tables    = []string{"proccmd", "procuserid", "procargid"}
-	metric_tables = []string{"realtimeperf", "avgperf", "realtimecpu", "avgcpu", "realtimedisk", "avgdisk", "realtimenet", "avgnet"}
+	metric_ref_tables    = []string{"proccmd", "procuserid", "procargid", "avgperf", "avgcpu", "avgdisk", "avgnet", "avgpid", "avgproc", "avgmaxperf", "avgmaxcpu", "avgmaxdisk", "avgmaxnet", "avgmaxpid", "avgmaxproc", "avgdf"}
+	metric_tables        = []string{"realtimeperf", "realtimecpu", "realtimedisk", "realtimenet", "realtimepid", "realtimeproc"}
 )
 
 func (d *DBHandler) CheckTable() {
 	d.CheckTableInfo()
+	d.CheckTableRef()
 	d.CheckTableMetric()
 }
 
@@ -89,6 +90,10 @@ func (d *DBHandler) CheckTableInfo() {
 					tx.MustExec(fmt.Sprintf(data.MetricDiskStmt, tb, ontunetime_type))
 				} else if tb[len(tb)-3:] == "net" {
 					tx.MustExec(fmt.Sprintf(data.MetricNetStmt, tb, ontunetime_type))
+				} else if tb[len(tb)-3:] == "pid" {
+					tx.MustExec(fmt.Sprintf(data.MetricPidStmt, tb, ontunetime_type))
+				} else if tb[len(tb)-4:] == "proc" {
+					tx.MustExec(fmt.Sprintf(data.MetricProcStmt, tb, ontunetime_type))
 				}
 
 				tx.MustExec(fmt.Sprintf(data.MetricHypertable, tb))
@@ -101,8 +106,39 @@ func (d *DBHandler) CheckTableInfo() {
 	}
 }
 
+func (d *DBHandler) CheckTableRef() {
+	d.createRefTables(false)
+}
+
 func (d *DBHandler) CheckTableMetric() {
 	d.createMetricTables(false)
+}
+
+func (d *DBHandler) CheckDailyTableRef() {
+	var rTableCreate bool
+	if d.dbtype == "pg" {
+		for {
+			hour := time.Now().Hour()
+			if hour >= 23 && !rTableCreate {
+				rTableCreate = true
+				d.createRefTables(true)
+			} else if hour < 23 {
+				rTableCreate = false
+			}
+			time.Sleep(time.Second * time.Duration(10))
+		}
+	}
+}
+
+func (d *DBHandler) createRefTables(check_flag bool) {
+	for _, tbname := range metric_ref_tables {
+		tablename := d.getTableName("day", tbname, check_flag)
+		LogWrite("log", fmt.Sprintf("%s\n", tablename))
+		if !d.existTableinfo(tablename) {
+			_, err := d.db.Exec(fmt.Sprintf(data.RefStmt, tablename))
+			ErrorPq(err)
+		}
+	}
 }
 
 func (d *DBHandler) CheckHourTableMetric() {
@@ -110,10 +146,10 @@ func (d *DBHandler) CheckHourTableMetric() {
 	if d.dbtype == "pg" {
 		for {
 			min := time.Now().Minute()
-			if min >= 55 && !mTableCreate {
+			if min >= 50 && !mTableCreate {
 				mTableCreate = true
 				d.createMetricTables(true)
-			} else if min != 55 {
+			} else if min < 50 {
 				mTableCreate = false
 			}
 			time.Sleep(time.Second * time.Duration(10))
@@ -123,7 +159,7 @@ func (d *DBHandler) CheckHourTableMetric() {
 
 func (d *DBHandler) createMetricTables(check_flag bool) {
 	for _, tbname := range metric_tables {
-		tablename := d.getMetricTableName(tbname, check_flag)
+		tablename := d.getTableName("hour", tbname, check_flag)
 		LogWrite("log", fmt.Sprintf("%s\n", tablename))
 		if !d.existTableinfo(tablename) {
 			var ontunetime_type string = "integer"
@@ -140,20 +176,32 @@ func (d *DBHandler) createMetricTables(check_flag bool) {
 			} else if tbname[len(tbname)-3:] == "net" {
 				_, err := d.db.Exec(fmt.Sprintf(data.MetricNetStmt, tablename, ontunetime_type))
 				ErrorPq(err)
+			} else if tbname[len(tbname)-3:] == "pid" {
+				_, err := d.db.Exec(fmt.Sprintf(data.MetricPidStmt, tablename, ontunetime_type))
+				ErrorPq(err)
+			} else if tbname[len(tbname)-4:] == "proc" {
+				_, err := d.db.Exec(fmt.Sprintf(data.MetricProcStmt, tablename, ontunetime_type))
+				ErrorPq(err)
 			}
 		}
 	}
 }
 
-func (d *DBHandler) getMetricTableName(tablename string, check_flag bool) string {
+func (d *DBHandler) getTableName(tabletype string, tablename string, check_flag bool) string {
 	if d.dbtype == "pg" {
 		now := time.Now()
+		var format string
+		if tabletype == "hour" {
+			format = HOURLY_DATE_FORMAT
+		} else if tabletype == "day" {
+			format = DAILY_DATE_FORMAT
+		}
 
 		var createHour string
 		if check_flag {
-			createHour = now.Add(10 * time.Minute).Format(DATE_FORMAT)
+			createHour = now.Add(time.Hour * time.Duration(1)).Format(format)
 		} else {
-			createHour = now.Format(DATE_FORMAT)
+			createHour = now.Format(HOURLY_DATE_FORMAT)
 		}
 		metrictablename := tablename + "_" + createHour
 		return metrictablename
@@ -209,9 +257,9 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 
 		k := key.(string)
 		if len(k) >= 12 && k[:12] == "realtimeperf" {
-			var realtimeperf_arr data.BasicperfArr = data.BasicperfArr{}
+			var realtimeperf_arr data.PerfArr = data.PerfArr{}
 			insert_agent_data.Range(func(k, v any) bool {
-				agent_struct_data := v.(*data.Basicperf)
+				agent_struct_data := v.(*data.Perf)
 				realtimeperf_arr.SetData(*agent_struct_data)
 
 				return true
@@ -222,21 +270,62 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 
 			if GetMapSize(val) > 0 {
 				if d.dbtype == "pg" {
-					tx.MustExec(fmt.Sprintf(data.InsertPerfPg, d.getMetricTableName("realtimeperf", false)), args...)
+					tx.MustExec(fmt.Sprintf(data.InsertPerfPg, d.getTableName("hour", "realtimeperf", false)), args...)
 				} else if d.dbtype == "ts" {
-					tx.MustExec(fmt.Sprintf(data.InsertPerfTs, d.getMetricTableName("realtimeperf", false)), args...)
+					tx.MustExec(fmt.Sprintf(data.InsertPerfTs, d.getTableName("hour", "realtimeperf", false)), args...)
 				}
 				err := tx.Commit()
 				ErrorTx(err, tx)
-				LogWrite("log", fmt.Sprintf("rperf %d %s %s %d %d", idx, k, d.dbtype, len(realtimeperf_arr.Ontunetime), GlobalOntunetime))
+				LogWrite("debug", fmt.Sprintf("rperf %d %s %s %d %d", idx, k, d.dbtype, len(realtimeperf_arr.Ontunetime), GlobalOntunetime))
 			}
-
-		} else if len(k) >= 12 && k[:12] == "realtimeproc" {
-			fmt.Println("proc")
-		} else if len(k) >= 12 && k[:12] == "realtimedisk" {
-			var realtimedisk_arr data.DiskperfArr = data.DiskperfArr{}
+		} else if len(k) >= 11 && k[:11] == "realtimepid" {
+			var realtimepid_arr data.PidArr = data.PidArr{}
 			insert_agent_data.Range(func(k, v any) bool {
-				agent_struct_data := v.(*data.Diskperf)
+				agent_struct_data := v.(*data.Pid)
+				realtimepid_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+			args := realtimepid_arr.GetArgs(d.dbtype)
+
+			if GetMapSize(val) > 0 {
+				if d.dbtype == "pg" {
+					tx.MustExec(fmt.Sprintf(data.InsertPidPg, d.getTableName("hour", "realtimepid", false)), args...)
+				} else if d.dbtype == "ts" {
+					tx.MustExec(fmt.Sprintf(data.InsertPidTs, d.getTableName("hour", "realtimepid", false)), args...)
+				}
+				err := tx.Commit()
+				ErrorTx(err, tx)
+				LogWrite("debug", fmt.Sprintf("rpid %d %s %s %d %d", idx, k, d.dbtype, len(realtimepid_arr.Ontunetime), GlobalOntunetime))
+			}
+		} else if len(k) >= 12 && k[:12] == "realtimeproc" {
+			var realtimeproc_arr data.ProcArr = data.ProcArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Proc)
+				realtimeproc_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+			args := realtimeproc_arr.GetArgs(d.dbtype)
+
+			if GetMapSize(val) > 0 {
+				if d.dbtype == "pg" {
+					tx.MustExec(fmt.Sprintf(data.InsertProcPg, d.getTableName("hour", "realtimeproc", false)), args...)
+				} else if d.dbtype == "ts" {
+					tx.MustExec(fmt.Sprintf(data.InsertProcTs, d.getTableName("hour", "realtimeproc", false)), args...)
+				}
+				err := tx.Commit()
+				ErrorTx(err, tx)
+				LogWrite("debug", fmt.Sprintf("rproc %d %s %s %d %d", idx, k, d.dbtype, len(realtimeproc_arr.Ontunetime), GlobalOntunetime))
+			}
+		} else if len(k) >= 12 && k[:12] == "realtimedisk" {
+			var realtimedisk_arr data.DiskArr = data.DiskArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Disk)
 				realtimedisk_arr.SetData(*agent_struct_data)
 
 				return true
@@ -247,18 +336,18 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 
 			if GetMapSize(val) > 0 {
 				if d.dbtype == "pg" {
-					tx.MustExec(fmt.Sprintf(data.InsertDiskPg, d.getMetricTableName("realtimedisk", false)), args...)
+					tx.MustExec(fmt.Sprintf(data.InsertDiskPg, d.getTableName("hour", "realtimedisk", false)), args...)
 				} else if d.dbtype == "ts" {
-					tx.MustExec(fmt.Sprintf(data.InsertDiskTs, d.getMetricTableName("realtimedisk", false)), args...)
+					tx.MustExec(fmt.Sprintf(data.InsertDiskTs, d.getTableName("hour", "realtimedisk", false)), args...)
 				}
 				err := tx.Commit()
 				ErrorTx(err, tx)
-				LogWrite("log", fmt.Sprintf("rdisk %d %s %s %d %d", idx, k, d.dbtype, len(realtimedisk_arr.Ontunetime), GlobalOntunetime))
+				LogWrite("debug", fmt.Sprintf("rdisk %d %s %s %d %d", idx, k, d.dbtype, len(realtimedisk_arr.Ontunetime), GlobalOntunetime))
 			}
 		} else if len(k) >= 11 && k[:11] == "realtimenet" {
-			var realtimenet_arr data.NetperfArr = data.NetperfArr{}
+			var realtimenet_arr data.NetArr = data.NetArr{}
 			insert_agent_data.Range(func(k, v any) bool {
-				agent_struct_data := v.(*data.Netperf)
+				agent_struct_data := v.(*data.Net)
 				realtimenet_arr.SetData(*agent_struct_data)
 
 				return true
@@ -269,18 +358,18 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 
 			if GetMapSize(val) > 0 {
 				if d.dbtype == "pg" {
-					tx.MustExec(fmt.Sprintf(data.InsertNetPg, d.getMetricTableName("realtimenet", false)), args...)
+					tx.MustExec(fmt.Sprintf(data.InsertNetPg, d.getTableName("hour", "realtimenet", false)), args...)
 				} else if d.dbtype == "ts" {
-					tx.MustExec(fmt.Sprintf(data.InsertNetTs, d.getMetricTableName("realtimenet", false)), args...)
+					tx.MustExec(fmt.Sprintf(data.InsertNetTs, d.getTableName("hour", "realtimenet", false)), args...)
 				}
 				err := tx.Commit()
 				ErrorTx(err, tx)
-				LogWrite("log", fmt.Sprintf("rnet %d %s %s %d %d", idx, k, d.dbtype, len(realtimenet_arr.Ontunetime), GlobalOntunetime))
+				LogWrite("debug", fmt.Sprintf("rnet %d %s %s %d %d", idx, k, d.dbtype, len(realtimenet_arr.Ontunetime), GlobalOntunetime))
 			}
 		} else if len(k) >= 11 && k[:11] == "realtimecpu" {
-			var realtimecpu_arr data.CpuperfArr = data.CpuperfArr{}
+			var realtimecpu_arr data.CpuArr = data.CpuArr{}
 			insert_agent_data.Range(func(k, v any) bool {
-				agent_struct_data := v.(*data.Cpuperf)
+				agent_struct_data := v.(*data.Cpu)
 				realtimecpu_arr.SetData(*agent_struct_data)
 
 				return true
@@ -291,18 +380,18 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 
 			if GetMapSize(val) > 0 {
 				if d.dbtype == "pg" {
-					tx.MustExec(fmt.Sprintf(data.InsertCpuPg, d.getMetricTableName("realtimecpu", false)), args...)
+					tx.MustExec(fmt.Sprintf(data.InsertCpuPg, d.getTableName("hour", "realtimecpu", false)), args...)
 				} else if d.dbtype == "ts" {
-					tx.MustExec(fmt.Sprintf(data.InsertCpuTs, d.getMetricTableName("realtimecpu", false)), args...)
+					tx.MustExec(fmt.Sprintf(data.InsertCpuTs, d.getTableName("hour", "realtimecpu", false)), args...)
 				}
 				err := tx.Commit()
 				ErrorTx(err, tx)
-				LogWrite("log", fmt.Sprintf("rcpu %d %s %s %d %d", idx, k, d.dbtype, len(realtimecpu_arr.Ontunetime), GlobalOntunetime))
+				LogWrite("debug", fmt.Sprintf("rcpu %d %s %s %d %d", idx, k, d.dbtype, len(realtimecpu_arr.Ontunetime), GlobalOntunetime))
 			}
 		} else if len(k) >= 7 && k[:7] == "avgperf" {
-			var avgperf_arr data.BasicperfArr = data.BasicperfArr{}
+			var avgperf_arr data.PerfArr = data.PerfArr{}
 			insert_agent_data.Range(func(k, v any) bool {
-				agent_struct_data := v.(*data.Basicperf)
+				agent_struct_data := v.(*data.Perf)
 				avgperf_arr.SetData(*agent_struct_data)
 
 				return true
@@ -311,17 +400,55 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 			tx := d.db.MustBegin()
 
 			if d.dbtype == "pg" {
-				tx.MustExec(fmt.Sprintf(data.InsertPerfPg, d.getMetricTableName("avgperf", false)), avgperf_arr.GetArgs(d.dbtype)...)
+				tx.MustExec(fmt.Sprintf(data.InsertPerfPg, d.getTableName("day", "avgperf", false)), avgperf_arr.GetArgs(d.dbtype)...)
 			} else if d.dbtype == "ts" {
-				tx.MustExec(fmt.Sprintf(data.InsertPerfTs, d.getMetricTableName("avgperf", false)), avgperf_arr.GetArgs(d.dbtype)...)
+				tx.MustExec(fmt.Sprintf(data.InsertPerfTs, d.getTableName("day", "avgperf", false)), avgperf_arr.GetArgs(d.dbtype)...)
 			}
 			err := tx.Commit()
-			LogWrite("log", fmt.Sprintf("aperf %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			LogWrite("debug", fmt.Sprintf("aperf %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			ErrorTx(err, tx)
+		} else if len(k) >= 6 && k[:6] == "avgpid" {
+			var avgpid_arr data.PidArr = data.PidArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Pid)
+				avgpid_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+
+			if d.dbtype == "pg" {
+				tx.MustExec(fmt.Sprintf(data.InsertPidPg, d.getTableName("day", "avgpid", false)), avgpid_arr.GetArgs(d.dbtype)...)
+			} else if d.dbtype == "ts" {
+				tx.MustExec(fmt.Sprintf(data.InsertPidTs, d.getTableName("day", "avgpid", false)), avgpid_arr.GetArgs(d.dbtype)...)
+			}
+			err := tx.Commit()
+			LogWrite("debug", fmt.Sprintf("apid %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			ErrorTx(err, tx)
+		} else if len(k) >= 7 && k[:7] == "avgproc" {
+			var avgproc_arr data.ProcArr = data.ProcArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Proc)
+				avgproc_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+
+			if d.dbtype == "pg" {
+				tx.MustExec(fmt.Sprintf(data.InsertProcPg, d.getTableName("day", "avgproc", false)), avgproc_arr.GetArgs(d.dbtype)...)
+			} else if d.dbtype == "ts" {
+				tx.MustExec(fmt.Sprintf(data.InsertProcTs, d.getTableName("day", "avgproc", false)), avgproc_arr.GetArgs(d.dbtype)...)
+			}
+			err := tx.Commit()
+			LogWrite("debug", fmt.Sprintf("aproc %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
 			ErrorTx(err, tx)
 		} else if len(k) >= 7 && k[:7] == "avgdisk" {
-			var avgdisk_arr data.DiskperfArr = data.DiskperfArr{}
+			var avgdisk_arr data.DiskArr = data.DiskArr{}
 			insert_agent_data.Range(func(k, v any) bool {
-				agent_struct_data := v.(*data.Diskperf)
+				agent_struct_data := v.(*data.Disk)
 				avgdisk_arr.SetData(*agent_struct_data)
 
 				return true
@@ -330,17 +457,17 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 			tx := d.db.MustBegin()
 
 			if d.dbtype == "pg" {
-				tx.MustExec(fmt.Sprintf(data.InsertDiskPg, d.getMetricTableName("avgdisk", false)), avgdisk_arr.GetArgs(d.dbtype)...)
+				tx.MustExec(fmt.Sprintf(data.InsertDiskPg, d.getTableName("day", "avgdisk", false)), avgdisk_arr.GetArgs(d.dbtype)...)
 			} else if d.dbtype == "ts" {
-				tx.MustExec(fmt.Sprintf(data.InsertDiskTs, d.getMetricTableName("avgdisk", false)), avgdisk_arr.GetArgs(d.dbtype)...)
+				tx.MustExec(fmt.Sprintf(data.InsertDiskTs, d.getTableName("day", "avgdisk", false)), avgdisk_arr.GetArgs(d.dbtype)...)
 			}
 			err := tx.Commit()
-			LogWrite("log", fmt.Sprintf("adisk %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			LogWrite("debug", fmt.Sprintf("adisk %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
 			ErrorTx(err, tx)
 		} else if len(k) >= 6 && k[:6] == "avgnet" {
-			var avgnet_arr data.NetperfArr = data.NetperfArr{}
+			var avgnet_arr data.NetArr = data.NetArr{}
 			insert_agent_data.Range(func(k, v any) bool {
-				agent_struct_data := v.(*data.Netperf)
+				agent_struct_data := v.(*data.Net)
 				avgnet_arr.SetData(*agent_struct_data)
 
 				return true
@@ -349,17 +476,17 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 			tx := d.db.MustBegin()
 
 			if d.dbtype == "pg" {
-				tx.MustExec(fmt.Sprintf(data.InsertNetPg, d.getMetricTableName("avgnet", false)), avgnet_arr.GetArgs(d.dbtype)...)
+				tx.MustExec(fmt.Sprintf(data.InsertNetPg, d.getTableName("day", "avgnet", false)), avgnet_arr.GetArgs(d.dbtype)...)
 			} else if d.dbtype == "ts" {
-				tx.MustExec(fmt.Sprintf(data.InsertNetTs, d.getMetricTableName("avgnet", false)), avgnet_arr.GetArgs(d.dbtype)...)
+				tx.MustExec(fmt.Sprintf(data.InsertNetTs, d.getTableName("day", "avgnet", false)), avgnet_arr.GetArgs(d.dbtype)...)
 			}
 			err := tx.Commit()
-			LogWrite("log", fmt.Sprintf("anet %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			LogWrite("debug", fmt.Sprintf("anet %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
 			ErrorTx(err, tx)
 		} else if len(k) >= 6 && k[:6] == "avgcpu" {
-			var avgcpu_arr data.CpuperfArr = data.CpuperfArr{}
+			var avgcpu_arr data.CpuArr = data.CpuArr{}
 			insert_agent_data.Range(func(k, v any) bool {
-				agent_struct_data := v.(*data.Cpuperf)
+				agent_struct_data := v.(*data.Cpu)
 				avgcpu_arr.SetData(*agent_struct_data)
 
 				return true
@@ -368,12 +495,126 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 			tx := d.db.MustBegin()
 
 			if d.dbtype == "pg" {
-				tx.MustExec(fmt.Sprintf(data.InsertCpuPg, d.getMetricTableName("avgcpu", false)), avgcpu_arr.GetArgs(d.dbtype)...)
+				tx.MustExec(fmt.Sprintf(data.InsertCpuPg, d.getTableName("day", "avgcpu", false)), avgcpu_arr.GetArgs(d.dbtype)...)
 			} else if d.dbtype == "ts" {
-				tx.MustExec(fmt.Sprintf(data.InsertCpuTs, d.getMetricTableName("avgcpu", false)), avgcpu_arr.GetArgs(d.dbtype)...)
+				tx.MustExec(fmt.Sprintf(data.InsertCpuTs, d.getTableName("day", "avgcpu", false)), avgcpu_arr.GetArgs(d.dbtype)...)
 			}
 			err := tx.Commit()
-			LogWrite("log", fmt.Sprintf("acpu %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			LogWrite("debug", fmt.Sprintf("acpu %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			ErrorTx(err, tx)
+		} else if len(k) >= 10 && k[:10] == "avgmaxperf" {
+			var avgperf_arr data.PerfArr = data.PerfArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Perf)
+				avgperf_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+
+			if d.dbtype == "pg" {
+				tx.MustExec(fmt.Sprintf(data.InsertPerfPg, d.getTableName("day", "avgmaxperf", false)), avgperf_arr.GetArgs(d.dbtype)...)
+			} else if d.dbtype == "ts" {
+				tx.MustExec(fmt.Sprintf(data.InsertPerfTs, d.getTableName("day", "avgmaxperf", false)), avgperf_arr.GetArgs(d.dbtype)...)
+			}
+			err := tx.Commit()
+			LogWrite("debug", fmt.Sprintf("amperf %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			ErrorTx(err, tx)
+		} else if len(k) >= 9 && k[:9] == "avgmaxpid" {
+			var avgpid_arr data.PidArr = data.PidArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Pid)
+				avgpid_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+
+			if d.dbtype == "pg" {
+				tx.MustExec(fmt.Sprintf(data.InsertPidPg, d.getTableName("day", "avgmaxpid", false)), avgpid_arr.GetArgs(d.dbtype)...)
+			} else if d.dbtype == "ts" {
+				tx.MustExec(fmt.Sprintf(data.InsertPidTs, d.getTableName("day", "avgmaxpid", false)), avgpid_arr.GetArgs(d.dbtype)...)
+			}
+			err := tx.Commit()
+			LogWrite("debug", fmt.Sprintf("ampid %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			ErrorTx(err, tx)
+		} else if len(k) >= 10 && k[:10] == "avgmaxproc" {
+			var avgproc_arr data.ProcArr = data.ProcArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Proc)
+				avgproc_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+
+			if d.dbtype == "pg" {
+				tx.MustExec(fmt.Sprintf(data.InsertProcPg, d.getTableName("day", "avgmaxproc", false)), avgproc_arr.GetArgs(d.dbtype)...)
+			} else if d.dbtype == "ts" {
+				tx.MustExec(fmt.Sprintf(data.InsertProcTs, d.getTableName("day", "avgmaxproc", false)), avgproc_arr.GetArgs(d.dbtype)...)
+			}
+			err := tx.Commit()
+			LogWrite("debug", fmt.Sprintf("amproc %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			ErrorTx(err, tx)
+		} else if len(k) >= 10 && k[:10] == "avgmaxdisk" {
+			var avgdisk_arr data.DiskArr = data.DiskArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Disk)
+				avgdisk_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+
+			if d.dbtype == "pg" {
+				tx.MustExec(fmt.Sprintf(data.InsertDiskPg, d.getTableName("day", "avgmaxdisk", false)), avgdisk_arr.GetArgs(d.dbtype)...)
+			} else if d.dbtype == "ts" {
+				tx.MustExec(fmt.Sprintf(data.InsertDiskTs, d.getTableName("day", "avgmaxdisk", false)), avgdisk_arr.GetArgs(d.dbtype)...)
+			}
+			err := tx.Commit()
+			LogWrite("debug", fmt.Sprintf("amdisk %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			ErrorTx(err, tx)
+		} else if len(k) >= 9 && k[:9] == "avgmaxnet" {
+			var avgnet_arr data.NetArr = data.NetArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Net)
+				avgnet_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+
+			if d.dbtype == "pg" {
+				tx.MustExec(fmt.Sprintf(data.InsertNetPg, d.getTableName("day", "avgmaxnet", false)), avgnet_arr.GetArgs(d.dbtype)...)
+			} else if d.dbtype == "ts" {
+				tx.MustExec(fmt.Sprintf(data.InsertNetTs, d.getTableName("day", "avgmaxnet", false)), avgnet_arr.GetArgs(d.dbtype)...)
+			}
+			err := tx.Commit()
+			LogWrite("debug", fmt.Sprintf("amnet %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			ErrorTx(err, tx)
+		} else if len(k) >= 9 && k[:9] == "avgmaxcpu" {
+			var avgcpu_arr data.CpuArr = data.CpuArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Cpu)
+				avgcpu_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+
+			if d.dbtype == "pg" {
+				tx.MustExec(fmt.Sprintf(data.InsertCpuPg, d.getTableName("day", "avgmaxcpu", false)), avgcpu_arr.GetArgs(d.dbtype)...)
+			} else if d.dbtype == "ts" {
+				tx.MustExec(fmt.Sprintf(data.InsertCpuTs, d.getTableName("day", "avgmaxcpu", false)), avgcpu_arr.GetArgs(d.dbtype)...)
+			}
+			err := tx.Commit()
+			LogWrite("debug", fmt.Sprintf("amcpu %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
 			ErrorTx(err, tx)
 		}
 
@@ -385,7 +626,7 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 		if c := recover(); c != nil {
 			fmt.Println("recover data")
 		}
-		//LogWrite("log", fmt.Sprintf("waitgroup %d", idx))
+		//LogWrite("debug", fmt.Sprintf("waitgroup %d", idx))
 		wg.Done()
 	}()
 }
@@ -405,7 +646,7 @@ func (d *DBHandler) InsertLastPerfData(agent_data *sync.Map, wg *sync.WaitGroup)
 	err := tx.Commit()
 	ErrorTx(err, tx)
 
-	//LogWrite("log", "waitgroup -2")
+	//LogWrite("debug", "waitgroup -2")
 	defer wg.Done()
 }
 
@@ -423,10 +664,10 @@ func (d *DBHandler) InsertLastRealtimePerfData(agent_data *sync.Map, wg *sync.Wa
 		tx.MustExec(data.TruncateLastrealtimeperf)
 		tx.MustExec(data.InsertLastrealtimeperf, lastrealtimeperf_arr.GetArgs()...)
 		err := tx.Commit()
-		//LogWrite("log", fmt.Sprintf("lrtp %s %d", d.dbtype, GlobalOntunetime))
+		//LogWrite("debug", fmt.Sprintf("lrtp %s %d", d.dbtype, GlobalOntunetime))
 		ErrorTx(err, tx)
 	}
-	//LogWrite("log", "waitgroup -1")
+	//LogWrite("debug", "waitgroup -1")
 	defer wg.Done()
 }
 
@@ -451,15 +692,15 @@ func (d *DBHandler) InitDeviceid() {
 	err := d.db.QueryRow("SELECT COUNT(*) FROM deviceid").Scan(&exist_count)
 	ErrorFatal(err)
 
-	if exist_count < len(DEVICE_IDS) {
+	if exist_count < len(data.DEVICE_IDS) {
 		keys := make([]int, 0)
-		for k := range DEVICE_IDS {
+		for k := range data.DEVICE_IDS {
 			keys = append(keys, k)
 		}
 
 		tx := d.db.MustBegin()
 		tx.MustExec(data.TruncateDeviceid)
-		tx.MustExec(data.InsertDeviceid, pq.Array(keys), pq.StringArray(DEVICE_IDS))
+		tx.MustExec(data.InsertDeviceid, pq.Array(keys), pq.StringArray(data.DEVICE_IDS))
 		err = tx.Commit()
 		ErrorTx(err, tx)
 	}
@@ -470,17 +711,53 @@ func (d *DBHandler) InitDescid() {
 	err := d.db.QueryRow("SELECT COUNT(*) FROM descid").Scan(&exist_count)
 	ErrorFatal(err)
 
-	if exist_count < len(VOLUME_GROUPS) {
+	if exist_count < len(data.VOLUME_GROUPS) {
 		keys := make([]int, 0)
-		for k := range VOLUME_GROUPS {
+		for k := range data.VOLUME_GROUPS {
 			keys = append(keys, k)
 		}
 
 		tx := d.db.MustBegin()
 		tx.MustExec(data.TruncateDescid)
-		tx.MustExec(data.InsertDescid, pq.Array(keys), pq.StringArray(VOLUME_GROUPS))
+		tx.MustExec(data.InsertDescid, pq.Array(keys), pq.StringArray(data.VOLUME_GROUPS))
 		err = tx.Commit()
 		ErrorTx(err, tx)
+	}
+}
+
+func (d *DBHandler) InitRef() {
+	for _, v := range metric_ref_tables {
+		tablename := d.getTableName("day", v, false)
+		var exist_count int
+		err := d.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", tablename)).Scan(&exist_count)
+		ErrorFatal(err)
+
+		var total_count int
+		var total_data []string
+		switch v {
+		case "proccmd":
+			total_count = 1000
+			total_data = data.PROCCMD_DATA
+		case "procuserid":
+			total_count = 100
+			total_data = data.PROCUSERID_DATA
+		case "procargid":
+			total_count = 1000
+			total_data = data.PROCARGID_DATA
+		}
+
+		if exist_count < total_count {
+			keys := make([]int, 0)
+			for k := range total_data {
+				keys = append(keys, k)
+			}
+
+			tx := d.db.MustBegin()
+			tx.MustExec(fmt.Sprintf(data.TruncateRef, tablename))
+			tx.MustExec(fmt.Sprintf(data.InsertRef, tablename), pq.Array(keys), pq.StringArray(total_data))
+			err = tx.Commit()
+			ErrorTx(err, tx)
+		}
 	}
 }
 
@@ -504,8 +781,10 @@ func DBInit(dbinfo ConfigDbInfo, DemoHandler DemoHandler) *DBHandler {
 	d.InitExecAgentHostInfo()
 	d.InitDeviceid()
 	d.InitDescid()
+	d.InitRef()
 
 	go d.CheckHourTableMetric()
+	go d.CheckDailyTableRef()
 	go d.UpdateOntuneinfo()
 
 	return d

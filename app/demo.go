@@ -12,22 +12,24 @@ import (
 )
 
 type DemoHandler struct {
-	Hostcount    int
-	Interval     int
-	Agentinfo    data.AgentinfoArr
-	Hostinfo     data.HostinfoArr
-	AvgBasicPerf *sync.Map
-	AvgCpuPerf   *sync.Map
-	AvgDiskPerf  *sync.Map
-	AvgNetPerf   *sync.Map
+	Hostcount int
+	Interval  int
+	Agentinfo data.AgentinfoArr
+	Hostinfo  data.HostinfoArr
+	AvgPerf   *sync.Map
+	AvgCpu    *sync.Map
+	AvgDisk   *sync.Map
+	AvgNet    *sync.Map
+	AvgProc   *sync.Map
 }
 
 func (d *DemoHandler) Init(hostcount int) {
 	d.Hostcount = hostcount
-	d.AvgBasicPerf = &sync.Map{}
-	d.AvgCpuPerf = &sync.Map{}
-	d.AvgDiskPerf = &sync.Map{}
-	d.AvgNetPerf = &sync.Map{}
+	d.AvgPerf = &sync.Map{}
+	d.AvgCpu = &sync.Map{}
+	d.AvgDisk = &sync.Map{}
+	d.AvgNet = &sync.Map{}
+	d.AvgProc = &sync.Map{}
 }
 
 func (d *DemoHandler) InitDemoAgentInfo() {
@@ -43,11 +45,11 @@ func (d *DemoHandler) InitDemoAgentInfo() {
 			Enabled:           1,
 			Connected:         1,
 			Updated:           1,
-			Shorttermbasic:    2,
+			Shorttermperf:     2,
 			Shorttermproc:     5,
 			Shorttermio:       5,
 			Shorttermcpu:      5,
-			Longtermbasic:     600,
+			Longtermperf:      600,
 			Longtermproc:      600,
 			Longtermio:        600,
 			Longtermcpu:       600,
@@ -61,7 +63,7 @@ func (d *DemoHandler) InitDemoAgentInfo() {
 			Timecheck:         1,
 			Disconnectedtime:  ts,
 			Skipdatatypes:     0,
-			Virbasicperf:      1,
+			Virperf:           1,
 			Hypervisor:        0,
 			Serviceevent:      "-",
 			Installdate:       ts,
@@ -103,13 +105,13 @@ func (d *DemoHandler) InitDemoAgentInfo() {
 	}
 }
 
-func (d *DemoHandler) GenerateBasicPerf(interval ConfigScrape) {
+func (d *DemoHandler) GeneratePerf(interval ConfigScrape) {
 	for {
 		ts := time.Now().Unix()
 
-		var agent_basicperf []*data.Basicperf = make([]*data.Basicperf, 0)
+		var agent_perf []*data.Perf = make([]*data.Perf, 0)
 		for i := 0; i < d.Hostcount; i++ {
-			demo_data := &data.Basicperf{
+			demo_data := &data.Perf{
 				Ontunetime:       ts,
 				Agenttime:        ts,
 				Agentid:          d.Agentinfo.Agentid[i],
@@ -170,29 +172,30 @@ func (d *DemoHandler) GenerateBasicPerf(interval ConfigScrape) {
 				Swapused_mb:      rand.Intn(100),
 				Dusm:             rand.Intn(100),
 			}
-			agent_basicperf = append(agent_basicperf, demo_data)
+			agent_perf = append(agent_perf, demo_data)
 
 			// Store Average Value
-			if val, ok := d.AvgBasicPerf.LoadOrStore(demo_data.Agentid, make([]*data.Basicperf, 0)); ok {
-				var avgvalue []*data.Basicperf = make([]*data.Basicperf, 0)
-				avgvalue = append(avgvalue, val.([]*data.Basicperf)...)
-				d.AvgBasicPerf.Store(demo_data.Agentid, avgvalue)
+			if val, ok := d.AvgPerf.LoadOrStore(demo_data.Agentid, make([]*data.Perf, 0)); ok {
+				var avgvalue []*data.Perf = make([]*data.Perf, 0)
+				avgvalue = append(avgvalue, val.([]*data.Perf)...)
+				d.AvgPerf.Store(demo_data.Agentid, avgvalue)
 			}
 		}
 
-		GlobalChannel.DemoBasicData <- agent_basicperf
+		GlobalChannel.DemoPerfData <- agent_perf
 		time.Sleep(time.Second * time.Duration(interval.Rate))
 	}
 }
 
-func (d *DemoHandler) GenerateAvgBasicPerf() {
-	var agent_basicperf []*data.Basicperf = make([]*data.Basicperf, 0)
+func (d *DemoHandler) GenerateAvgPerf() {
+	var agent_perf []*data.Perf = make([]*data.Perf, 0)
+	var max_perf []*data.Perf = make([]*data.Perf, 0)
 
-	d.AvgBasicPerf.Range(func(key, value any) bool {
-		avg_data := &data.Basicperf{
-			Agentid: key.(int),
-		}
-		for _, av := range value.([]*data.Basicperf) {
+	d.AvgPerf.Range(func(key, value any) bool {
+		avg_data := &data.Perf{Agentid: key.(int)}
+		max_data := &data.Perf{Agentid: key.(int)}
+
+		for _, av := range value.([]*data.Perf) {
 			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(av.Ontunetime)))
 			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(av.Ontunetime)))
 			avg_data.User = avg_data.User + av.User
@@ -251,8 +254,67 @@ func (d *DemoHandler) GenerateAvgBasicPerf() {
 			avg_data.Softirq = avg_data.Softirq + av.Softirq
 			avg_data.Swapused_mb = avg_data.Swapused_mb + av.Swapused_mb
 			avg_data.Dusm = avg_data.Dusm + av.Dusm
+
+			max_data.Ontunetime = int64(math.Max(float64(max_data.Ontunetime), float64(av.Ontunetime)))
+			max_data.Agenttime = int64(math.Max(float64(max_data.Agenttime), float64(av.Ontunetime)))
+			max_data.User = int(math.Max(float64(max_data.User), float64(av.User)))
+			max_data.Sys = int(math.Max(float64(max_data.Sys), float64(av.Sys)))
+			max_data.Wait = int(math.Max(float64(max_data.Wait), float64(av.Wait)))
+			max_data.Idle = int(math.Max(float64(max_data.Idle), float64(av.Idle)))
+			max_data.Processorcount = int(math.Max(float64(max_data.Processorcount), float64(av.Processorcount)))
+			max_data.Runqueue = int(math.Max(float64(max_data.Runqueue), float64(av.Runqueue)))
+			max_data.Blockqueue = int(math.Max(float64(max_data.Blockqueue), float64(av.Blockqueue)))
+			max_data.Waitqueue = int(math.Max(float64(max_data.Waitqueue), float64(av.Waitqueue)))
+			max_data.Pqueue = int(math.Max(float64(max_data.Pqueue), float64(av.Pqueue)))
+			max_data.Pcrateuser = int(math.Max(float64(max_data.Pcrateuser), float64(av.Pcrateuser)))
+			max_data.Pcratesys = int(math.Max(float64(max_data.Pcratesys), float64(av.Pcratesys)))
+			max_data.Memorysize = int(math.Max(float64(max_data.Memorysize), float64(av.Memorysize)))
+			max_data.Memoryused = int(math.Max(float64(max_data.Memoryused), float64(av.Memoryused)))
+			max_data.Memorypinned = int(math.Max(float64(max_data.Memorypinned), float64(av.Memorypinned)))
+			max_data.Memorysys = int(math.Max(float64(max_data.Memorysys), float64(av.Memorysys)))
+			max_data.Memoryuser = int(math.Max(float64(max_data.Memoryuser), float64(av.Memoryuser)))
+			max_data.Memorycache = int(math.Max(float64(max_data.Memorycache), float64(av.Memorycache)))
+			max_data.Avm = int(math.Max(float64(max_data.Avm), float64(av.Avm)))
+			max_data.Pagingspacein = int(math.Max(float64(max_data.Pagingspacein), float64(av.Pagingspacein)))
+			max_data.Pagingspaceout = int(math.Max(float64(max_data.Pagingspaceout), float64(av.Pagingspaceout)))
+			max_data.Filesystemin = int(math.Max(float64(max_data.Filesystemin), float64(av.Filesystemin)))
+			max_data.Filesystemout = int(math.Max(float64(max_data.Filesystemout), float64(av.Filesystemout)))
+			max_data.Memoryscan = int(math.Max(float64(max_data.Memoryscan), float64(av.Memoryscan)))
+			max_data.Memoryfreed = int(math.Max(float64(max_data.Memoryfreed), float64(av.Memoryfreed)))
+			max_data.Swapsize = int(math.Max(float64(max_data.Swapsize), float64(av.Swapsize)))
+			max_data.Swapused = int(math.Max(float64(max_data.Swapused), float64(av.Swapused)))
+			max_data.Swapactive = int(math.Max(float64(max_data.Swapactive), float64(av.Swapactive)))
+			max_data.Fork = int(math.Max(float64(max_data.Fork), float64(av.Fork)))
+			max_data.Exec = int(math.Max(float64(max_data.Exec), float64(av.Exec)))
+			max_data.Interupt = int(math.Max(float64(max_data.Interupt), float64(av.Interupt)))
+			max_data.Systemcall = int(math.Max(float64(max_data.Systemcall), float64(av.Systemcall)))
+			max_data.Contextswitch = int(math.Max(float64(max_data.Contextswitch), float64(av.Contextswitch)))
+			max_data.Semaphore = int(math.Max(float64(max_data.Semaphore), float64(av.Semaphore)))
+			max_data.Msg = int(math.Max(float64(max_data.Msg), float64(av.Msg)))
+			max_data.Diskreadwrite = int(math.Max(float64(max_data.Diskreadwrite), float64(av.Diskreadwrite)))
+			max_data.Diskiops = int(math.Max(float64(max_data.Diskiops), float64(av.Diskiops)))
+			max_data.Networkreadwrite = int(math.Max(float64(max_data.Networkreadwrite), float64(av.Networkreadwrite)))
+			max_data.Networkiops = int(math.Max(float64(max_data.Networkiops), float64(av.Networkiops)))
+			max_data.Topcommandid = int(math.Max(float64(max_data.Topcommandid), float64(av.Topcommandid)))
+			max_data.Topcommandcount = int(math.Max(float64(max_data.Topcommandcount), float64(av.Topcommandcount)))
+			max_data.Topuserid = int(math.Max(float64(max_data.Topuserid), float64(av.Topuserid)))
+			max_data.Topcpu = int(math.Max(float64(max_data.Topcpu), float64(av.Topcpu)))
+			max_data.Topdiskid = int(math.Max(float64(max_data.Topdiskid), float64(av.Topdiskid)))
+			max_data.Topvgid = int(math.Max(float64(max_data.Topvgid), float64(av.Topvgid)))
+			max_data.Topbusy = int(math.Max(float64(max_data.Topbusy), float64(av.Topbusy)))
+			max_data.Maxpid = int(math.Max(float64(max_data.Maxpid), float64(av.Maxpid)))
+			max_data.Threadcount = int(math.Max(float64(max_data.Threadcount), float64(av.Threadcount)))
+			max_data.Pidcount = int(math.Max(float64(max_data.Pidcount), float64(av.Pidcount)))
+			max_data.Linuxbuffer = int(math.Max(float64(max_data.Linuxbuffer), float64(av.Linuxbuffer)))
+			max_data.Linuxcached = int(math.Max(float64(max_data.Linuxcached), float64(av.Linuxcached)))
+			max_data.Linuxsrec = int(math.Max(float64(max_data.Linuxsrec), float64(av.Linuxsrec)))
+			max_data.Memused_mb = int(math.Max(float64(max_data.Memused_mb), float64(av.Memused_mb)))
+			max_data.Irq = int(math.Max(float64(max_data.Irq), float64(av.Irq)))
+			max_data.Softirq = int(math.Max(float64(max_data.Softirq), float64(av.Softirq)))
+			max_data.Swapused_mb = int(math.Max(float64(max_data.Swapused_mb), float64(av.Swapused_mb)))
+			max_data.Dusm = int(math.Max(float64(max_data.Dusm), float64(av.Dusm)))
 		}
-		if value_len := len(value.([]*data.Basicperf)); value_len > 0 {
+		if value_len := len(value.([]*data.Perf)); value_len > 0 {
 			avg_data.User = avg_data.User / value_len
 			avg_data.Sys = avg_data.Sys / value_len
 			avg_data.Wait = avg_data.Wait / value_len
@@ -310,26 +372,28 @@ func (d *DemoHandler) GenerateAvgBasicPerf() {
 			avg_data.Swapused_mb = avg_data.Swapused_mb / value_len
 			avg_data.Dusm = avg_data.Dusm / value_len
 		}
-		agent_basicperf = append(agent_basicperf, avg_data)
+		agent_perf = append(agent_perf, avg_data)
+		max_perf = append(max_perf, max_data)
 
 		return true
 	})
 
-	GlobalChannel.DemoAvgBasicData <- agent_basicperf
+	GlobalChannel.DemoAvgPerfData <- agent_perf
+	GlobalChannel.DemoAvgMaxPerfData <- max_perf
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgBasicPerf = &sync.Map{}
+	d.AvgPerf = &sync.Map{}
 }
 
-func (d *DemoHandler) GenerateCpuPerf(interval ConfigScrape) {
+func (d *DemoHandler) GenerateCpu(interval ConfigScrape) {
 	for {
 		ts := time.Now().Unix()
 
-		var agent_cpuperf []*data.Cpuperf = make([]*data.Cpuperf, 0)
+		var agent_cpu []*data.Cpu = make([]*data.Cpu, 0)
 		for i := 0; i < d.Hostcount; i++ {
 			for j := 0; j < CPU_CORE; j++ {
-				demo_data := &data.Cpuperf{
+				demo_data := &data.Cpu{
 					Ontunetime:    ts,
 					Agenttime:     ts,
 					Agentid:       d.Agentinfo.Agentid[i],
@@ -345,38 +409,38 @@ func (d *DemoHandler) GenerateCpuPerf(interval ConfigScrape) {
 					Systemcall:    rand.Intn(100),
 					Contextswitch: rand.Intn(100),
 				}
-				agent_cpuperf = append(agent_cpuperf, demo_data)
+				agent_cpu = append(agent_cpu, demo_data)
 
 				// Store Average Value
 				key := fmt.Sprintf("%d_%d", demo_data.Agentid, demo_data.Index)
-				if val, ok := d.AvgCpuPerf.LoadOrStore(key, make([]*data.Cpuperf, 0)); ok {
-					var avgvalue []*data.Cpuperf = make([]*data.Cpuperf, 0)
-					avgvalue = append(avgvalue, val.([]*data.Cpuperf)...)
-					d.AvgCpuPerf.Store(key, avgvalue)
+				if val, ok := d.AvgCpu.LoadOrStore(key, make([]*data.Cpu, 0)); ok {
+					var avgvalue []*data.Cpu = make([]*data.Cpu, 0)
+					avgvalue = append(avgvalue, val.([]*data.Cpu)...)
+					d.AvgCpu.Store(key, avgvalue)
 				}
 			}
 		}
 
-		GlobalChannel.DemoCpuData <- agent_cpuperf
+		GlobalChannel.DemoCpuData <- agent_cpu
 		time.Sleep(time.Second * time.Duration(interval.Rate))
 	}
 }
 
-func (d *DemoHandler) GenerateAvgCpuPerf() {
-	var agent_cpuperf []*data.Cpuperf = make([]*data.Cpuperf, 0)
+func (d *DemoHandler) GenerateAvgCpu() {
+	var agent_cpu []*data.Cpu = make([]*data.Cpu, 0)
+	var max_cpu []*data.Cpu = make([]*data.Cpu, 0)
 
-	d.AvgCpuPerf.Range(func(key, value any) bool {
+	d.AvgCpu.Range(func(key, value any) bool {
 		slice := strings.Split(key.(string), "_")
 		agentid, err := strconv.Atoi(slice[0])
 		ErrorCheck(err)
 		index, err := strconv.Atoi(slice[1])
 		ErrorCheck(err)
 
-		avg_data := &data.Cpuperf{
-			Agentid: agentid,
-			Index:   index,
-		}
-		for _, av := range value.([]*data.Cpuperf) {
+		avg_data := &data.Cpu{Agentid: agentid, Index: index}
+		max_data := &data.Cpu{Agentid: agentid, Index: index}
+
+		for _, av := range value.([]*data.Cpu) {
 			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(av.Ontunetime)))
 			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(av.Ontunetime)))
 			avg_data.User = avg_data.User + av.User
@@ -389,8 +453,22 @@ func (d *DemoHandler) GenerateAvgCpuPerf() {
 			avg_data.Interupt = avg_data.Interupt + av.Interupt
 			avg_data.Systemcall = avg_data.Systemcall + av.Systemcall
 			avg_data.Contextswitch = avg_data.Contextswitch + av.Contextswitch
+
+			max_data.Ontunetime = int64(math.Max(float64(max_data.Ontunetime), float64(av.Ontunetime)))
+			max_data.Agenttime = int64(math.Max(float64(max_data.Agenttime), float64(av.Ontunetime)))
+			max_data.User = int(math.Max(float64(max_data.User), float64(av.User)))
+			max_data.Sys = int(math.Max(float64(max_data.Sys), float64(av.Sys)))
+			max_data.Wait = int(math.Max(float64(max_data.Wait), float64(av.Wait)))
+			max_data.Idle = int(math.Max(float64(max_data.Idle), float64(av.Idle)))
+			max_data.Runqueue = int(math.Max(float64(max_data.Runqueue), float64(av.Runqueue)))
+			max_data.Fork = int(math.Max(float64(max_data.Fork), float64(av.Fork)))
+			max_data.Exec = int(math.Max(float64(max_data.Exec), float64(av.Exec)))
+			max_data.Interupt = int(math.Max(float64(max_data.Interupt), float64(av.Interupt)))
+			max_data.Systemcall = int(math.Max(float64(max_data.Systemcall), float64(av.Systemcall)))
+			max_data.Contextswitch = int(math.Max(float64(max_data.Contextswitch), float64(av.Contextswitch)))
+
 		}
-		if value_len := len(value.([]*data.Cpuperf)); value_len > 0 {
+		if value_len := len(value.([]*data.Cpu)); value_len > 0 {
 			avg_data.User = avg_data.User / value_len
 			avg_data.Sys = avg_data.Sys / value_len
 			avg_data.Wait = avg_data.Wait / value_len
@@ -402,26 +480,28 @@ func (d *DemoHandler) GenerateAvgCpuPerf() {
 			avg_data.Systemcall = avg_data.Systemcall / value_len
 			avg_data.Contextswitch = avg_data.Contextswitch / value_len
 		}
-		agent_cpuperf = append(agent_cpuperf, avg_data)
+		agent_cpu = append(agent_cpu, avg_data)
+		max_cpu = append(max_cpu, max_data)
 
 		return true
 	})
 
-	GlobalChannel.DemoAvgCpuData <- agent_cpuperf
+	GlobalChannel.DemoAvgCpuData <- agent_cpu
+	GlobalChannel.DemoAvgMaxCpuData <- max_cpu
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgCpuPerf = &sync.Map{}
+	d.AvgCpu = &sync.Map{}
 }
 
-func (d *DemoHandler) GenerateDiskPerf(interval ConfigScrape) {
+func (d *DemoHandler) GenerateDisk(interval ConfigScrape) {
 	for {
 		ts := time.Now().Unix()
 
-		var agent_diskperf []*data.Diskperf = make([]*data.Diskperf, 0)
+		var agent_disk []*data.Disk = make([]*data.Disk, 0)
 		for i := 0; i < d.Hostcount; i++ {
-			for ioid := range DISK_IONAME {
-				demo_data := &data.Diskperf{
+			for ioid := range data.DISK_IONAME {
+				demo_data := &data.Disk{
 					Ontunetime:   ts,
 					Agenttime:    ts,
 					Agentid:      d.Agentinfo.Agentid[i],
@@ -434,38 +514,38 @@ func (d *DemoHandler) GenerateDiskPerf(interval ConfigScrape) {
 					Readsvctime:  rand.Intn(100),
 					Writesvctime: rand.Intn(100),
 				}
-				agent_diskperf = append(agent_diskperf, demo_data)
+				agent_disk = append(agent_disk, demo_data)
 
 				// Store Average Value
 				key := fmt.Sprintf("%d_%d", demo_data.Agentid, demo_data.Ionameid)
-				if val, ok := d.AvgDiskPerf.LoadOrStore(key, make([]*data.Diskperf, 0)); ok {
-					var avgvalue []*data.Diskperf = make([]*data.Diskperf, 0)
-					avgvalue = append(avgvalue, val.([]*data.Diskperf)...)
-					d.AvgDiskPerf.Store(key, avgvalue)
+				if val, ok := d.AvgDisk.LoadOrStore(key, make([]*data.Disk, 0)); ok {
+					var avgvalue []*data.Disk = make([]*data.Disk, 0)
+					avgvalue = append(avgvalue, val.([]*data.Disk)...)
+					d.AvgDisk.Store(key, avgvalue)
 				}
 			}
 		}
 
-		GlobalChannel.DemoDiskData <- agent_diskperf
+		GlobalChannel.DemoDiskData <- agent_disk
 		time.Sleep(time.Second * time.Duration(interval.Rate))
 	}
 }
 
-func (d *DemoHandler) GenerateAvgDiskPerf() {
-	var agent_diskperf []*data.Diskperf = make([]*data.Diskperf, 0)
+func (d *DemoHandler) GenerateAvgDisk() {
+	var agent_disk []*data.Disk = make([]*data.Disk, 0)
+	var max_disk []*data.Disk = make([]*data.Disk, 0)
 
-	d.AvgDiskPerf.Range(func(key, value any) bool {
+	d.AvgDisk.Range(func(key, value any) bool {
 		slice := strings.Split(key.(string), "_")
 		agentid, err := strconv.Atoi(slice[0])
 		ErrorCheck(err)
 		ioid, err := strconv.Atoi(slice[1])
 		ErrorCheck(err)
 
-		avg_data := &data.Diskperf{
-			Agentid:  agentid,
-			Ionameid: ioid,
-		}
-		for _, av := range value.([]*data.Diskperf) {
+		avg_data := &data.Disk{Agentid: agentid, Ionameid: ioid}
+		max_data := &data.Disk{Agentid: agentid, Ionameid: ioid}
+
+		for _, av := range value.([]*data.Disk) {
 			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(av.Ontunetime)))
 			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(av.Ontunetime)))
 			avg_data.Descid = av.Descid
@@ -476,8 +556,20 @@ func (d *DemoHandler) GenerateAvgDiskPerf() {
 			avg_data.Descid = avg_data.Descid + av.Descid
 			avg_data.Readsvctime = avg_data.Readsvctime + av.Readsvctime
 			avg_data.Writesvctime = avg_data.Writesvctime + av.Writesvctime
+
+			max_data.Ontunetime = int64(math.Max(float64(max_data.Ontunetime), float64(av.Ontunetime)))
+			max_data.Agenttime = int64(math.Max(float64(max_data.Agenttime), float64(av.Ontunetime)))
+			max_data.Descid = av.Descid
+			max_data.Readrate = int(math.Max(float64(max_data.Readrate), float64(av.Readrate)))
+			max_data.Writerate = int(math.Max(float64(max_data.Writerate), float64(av.Writerate)))
+			max_data.Iops = int(math.Max(float64(max_data.Iops), float64(av.Iops)))
+			max_data.Busy = int(math.Max(float64(max_data.Busy), float64(av.Busy)))
+			max_data.Descid = int(math.Max(float64(max_data.Descid), float64(av.Descid)))
+			max_data.Readsvctime = int(math.Max(float64(max_data.Readsvctime), float64(av.Readsvctime)))
+			max_data.Writesvctime = int(math.Max(float64(max_data.Writesvctime), float64(av.Writesvctime)))
+
 		}
-		if value_len := len(value.([]*data.Diskperf)); value_len > 0 {
+		if value_len := len(value.([]*data.Disk)); value_len > 0 {
 			avg_data.Readrate = avg_data.Readrate / value_len
 			avg_data.Writerate = avg_data.Writerate / value_len
 			avg_data.Iops = avg_data.Iops / value_len
@@ -486,26 +578,28 @@ func (d *DemoHandler) GenerateAvgDiskPerf() {
 			avg_data.Readsvctime = avg_data.Readsvctime / value_len
 			avg_data.Writesvctime = avg_data.Writesvctime / value_len
 		}
-		agent_diskperf = append(agent_diskperf, avg_data)
+		agent_disk = append(agent_disk, avg_data)
+		max_disk = append(max_disk, max_data)
 
 		return true
 	})
 
-	GlobalChannel.DemoAvgDiskData <- agent_diskperf
+	GlobalChannel.DemoAvgDiskData <- agent_disk
+	GlobalChannel.DemoAvgMaxDiskData <- max_disk
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgDiskPerf = &sync.Map{}
+	d.AvgDisk = &sync.Map{}
 }
 
-func (d *DemoHandler) GenerateNetPerf(interval ConfigScrape) {
+func (d *DemoHandler) GenerateNet(interval ConfigScrape) {
 	for {
 		ts := time.Now().Unix()
 
-		var agent_netperf []*data.Netperf = make([]*data.Netperf, 0)
+		var agent_net []*data.Net = make([]*data.Net, 0)
 		for i := 0; i < d.Hostcount; i++ {
-			for ioid := range NET_IONAME {
-				demo_data := &data.Netperf{
+			for ioid := range data.NET_IONAME {
+				demo_data := &data.Net{
 					Ontunetime: ts,
 					Agenttime:  ts,
 					Agentid:    d.Agentinfo.Agentid[i],
@@ -517,38 +611,38 @@ func (d *DemoHandler) GenerateNetPerf(interval ConfigScrape) {
 					Errorps:    rand.Intn(100),
 					Collision:  rand.Intn(100),
 				}
-				agent_netperf = append(agent_netperf, demo_data)
+				agent_net = append(agent_net, demo_data)
 
 				// Store Average Value
 				key := fmt.Sprintf("%d_%d", demo_data.Agentid, demo_data.Ionameid)
-				if val, ok := d.AvgNetPerf.LoadOrStore(key, make([]*data.Netperf, 0)); ok {
-					var avgvalue []*data.Netperf = make([]*data.Netperf, 0)
-					avgvalue = append(avgvalue, val.([]*data.Netperf)...)
-					d.AvgNetPerf.Store(key, avgvalue)
+				if val, ok := d.AvgNet.LoadOrStore(key, make([]*data.Net, 0)); ok {
+					var avgvalue []*data.Net = make([]*data.Net, 0)
+					avgvalue = append(avgvalue, val.([]*data.Net)...)
+					d.AvgNet.Store(key, avgvalue)
 				}
 			}
 		}
 
-		GlobalChannel.DemoNetData <- agent_netperf
+		GlobalChannel.DemoNetData <- agent_net
 		time.Sleep(time.Second * time.Duration(interval.Rate))
 	}
 }
 
-func (d *DemoHandler) GenerateAvgNetPerf() {
-	var agent_netperf []*data.Netperf = make([]*data.Netperf, 0)
+func (d *DemoHandler) GenerateAvgNet() {
+	var agent_net []*data.Net = make([]*data.Net, 0)
+	var max_net []*data.Net = make([]*data.Net, 0)
 
-	d.AvgNetPerf.Range(func(key, value any) bool {
+	d.AvgNet.Range(func(key, value any) bool {
 		slice := strings.Split(key.(string), "_")
 		agentid, err := strconv.Atoi(slice[0])
 		ErrorCheck(err)
 		ioid, err := strconv.Atoi(slice[1])
 		ErrorCheck(err)
 
-		avg_data := &data.Netperf{
-			Agentid:  agentid,
-			Ionameid: ioid,
-		}
-		for _, av := range value.([]*data.Netperf) {
+		avg_data := &data.Net{Agentid: agentid, Ionameid: ioid}
+		max_data := &data.Net{Agentid: agentid, Ionameid: ioid}
+
+		for _, av := range value.([]*data.Net) {
 			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(av.Ontunetime)))
 			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(av.Ontunetime)))
 			avg_data.Readrate = avg_data.Readrate + av.Readrate
@@ -557,8 +651,17 @@ func (d *DemoHandler) GenerateAvgNetPerf() {
 			avg_data.Writeiops = avg_data.Writeiops + av.Writeiops
 			avg_data.Errorps = avg_data.Errorps + av.Errorps
 			avg_data.Collision = avg_data.Collision + av.Collision
+
+			max_data.Ontunetime = int64(math.Max(float64(max_data.Ontunetime), float64(av.Ontunetime)))
+			max_data.Agenttime = int64(math.Max(float64(max_data.Agenttime), float64(av.Ontunetime)))
+			max_data.Readrate = int(math.Max(float64(max_data.Readrate), float64(av.Readrate)))
+			max_data.Writerate = int(math.Max(float64(max_data.Writerate), float64(av.Writerate)))
+			max_data.Readiops = int(math.Max(float64(max_data.Readiops), float64(av.Readiops)))
+			max_data.Writeiops = int(math.Max(float64(max_data.Writeiops), float64(av.Writeiops)))
+			max_data.Errorps = int(math.Max(float64(max_data.Errorps), float64(av.Errorps)))
+			max_data.Collision = int(math.Max(float64(max_data.Collision), float64(av.Collision)))
 		}
-		if value_len := len(value.([]*data.Netperf)); value_len > 0 {
+		if value_len := len(value.([]*data.Net)); value_len > 0 {
 			avg_data.Readrate = avg_data.Readrate / value_len
 			avg_data.Writerate = avg_data.Writerate / value_len
 			avg_data.Readiops = avg_data.Readiops / value_len
@@ -566,14 +669,169 @@ func (d *DemoHandler) GenerateAvgNetPerf() {
 			avg_data.Errorps = avg_data.Errorps / value_len
 			avg_data.Collision = avg_data.Collision / value_len
 		}
-		agent_netperf = append(agent_netperf, avg_data)
+		agent_net = append(agent_net, avg_data)
+		max_net = append(agent_net, max_data)
 
 		return true
 	})
 
-	GlobalChannel.DemoAvgNetData <- agent_netperf
+	GlobalChannel.DemoAvgNetData <- agent_net
+	GlobalChannel.DemoAvgMaxNetData <- max_net
+
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgNetPerf = &sync.Map{}
+	d.AvgNet = &sync.Map{}
+}
+
+func (d *DemoHandler) GenerateProc(interval ConfigScrape) {
+	for {
+		ts := time.Now().Unix()
+
+		var agent_proc []*data.Pid = make([]*data.Pid, 0)
+		for i := 0; i < d.Hostcount; i++ {
+			// 위 구조까지 포함하면 5중 For문이지만,
+			// 기본값으로 pc-3, pu-1, pa-3 이므로 실제 Loop 회수는 9회임
+			for _, pc := range PROCCMD_ARR {
+				for _, pu := range PROCUSER_ARR {
+					for _, pa := range PROCARG_ARR {
+						demo_data := &data.Pid{
+							Ontunetime: ts,
+							Agenttime:  ts,
+							Agentid:    d.Agentinfo.Agentid[i],
+							Pid:        rand.Intn(100),
+							Ppid:       rand.Intn(100),
+							Uid:        rand.Intn(100),
+							Cmdid:      pc,
+							Userid:     pu,
+							Argid:      pa,
+							Usr:        rand.Intn(100),
+							Sys:        rand.Intn(100),
+							Usrsys:     rand.Intn(100),
+							Sz:         rand.Intn(100),
+							Rss:        rand.Intn(100),
+							Vmem:       rand.Intn(100),
+							Chario:     rand.Intn(100),
+							Processcnt: rand.Intn(100),
+							Threadcnt:  rand.Intn(100),
+							Handlecnt:  rand.Intn(100),
+							Stime:      rand.Intn(100),
+							Pvbytes:    rand.Intn(100),
+							Pgpool:     rand.Intn(100),
+						}
+						agent_proc = append(agent_proc, demo_data)
+
+						// Store Average Value
+						key := fmt.Sprintf("%d_%d_%d_%d", demo_data.Agentid, demo_data.Cmdid, demo_data.Userid, demo_data.Argid)
+						if val, ok := d.AvgProc.LoadOrStore(key, make([]*data.Pid, 0)); ok {
+							var avgvalue []*data.Pid = make([]*data.Pid, 0)
+							avgvalue = append(avgvalue, val.([]*data.Pid)...)
+							d.AvgProc.Store(key, avgvalue)
+						}
+					}
+				}
+			}
+		}
+
+		GlobalChannel.DemoProcData <- agent_proc
+		time.Sleep(time.Second * time.Duration(interval.Rate))
+	}
+}
+
+func (d *DemoHandler) GenerateAvgProc() {
+	var agent_proc []*data.Pid = make([]*data.Pid, 0)
+	var max_proc []*data.Pid = make([]*data.Pid, 0)
+
+	d.AvgProc.Range(func(key, value any) bool {
+		slice := strings.Split(key.(string), "_")
+		agentid, err := strconv.Atoi(slice[0])
+		ErrorCheck(err)
+		cmdid, err := strconv.Atoi(slice[1])
+		ErrorCheck(err)
+		userid, err := strconv.Atoi(slice[2])
+		ErrorCheck(err)
+		argid, err := strconv.Atoi(slice[3])
+		ErrorCheck(err)
+
+		avg_data := &data.Pid{
+			Agentid: agentid,
+			Cmdid:   cmdid,
+			Userid:  userid,
+			Argid:   argid,
+		}
+
+		max_data := &data.Pid{
+			Agentid: agentid,
+			Cmdid:   cmdid,
+			Userid:  userid,
+			Argid:   argid,
+		}
+
+		// PID, PPID, UID는 Key 값은 아니지만 평균값으로 낼 데이터도 아니므로 최대값으로 잡음
+		for _, av := range value.([]*data.Pid) {
+			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(av.Ontunetime)))
+			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(av.Ontunetime)))
+			avg_data.Pid = int(math.Max(float64(avg_data.Pid), float64(av.Pid)))
+			avg_data.Ppid = int(math.Max(float64(avg_data.Ppid), float64(av.Ppid)))
+			avg_data.Uid = int(math.Max(float64(avg_data.Uid), float64(av.Uid)))
+			avg_data.Usr = avg_data.Usr + av.Usr
+			avg_data.Sys = avg_data.Sys + av.Sys
+			avg_data.Usrsys = avg_data.Usrsys + av.Usrsys
+			avg_data.Sz = avg_data.Sz + av.Sz
+			avg_data.Rss = avg_data.Rss + av.Rss
+			avg_data.Vmem = avg_data.Vmem + av.Vmem
+			avg_data.Chario = avg_data.Chario + av.Chario
+			avg_data.Processcnt = avg_data.Processcnt + av.Processcnt
+			avg_data.Threadcnt = avg_data.Threadcnt + av.Threadcnt
+			avg_data.Handlecnt = avg_data.Handlecnt + av.Handlecnt
+			avg_data.Stime = avg_data.Stime + av.Stime
+			avg_data.Pvbytes = avg_data.Pvbytes + av.Pvbytes
+			avg_data.Pgpool = avg_data.Pgpool + av.Pgpool
+
+			max_data.Ontunetime = int64(math.Max(float64(max_data.Ontunetime), float64(av.Ontunetime)))
+			max_data.Agenttime = int64(math.Max(float64(max_data.Agenttime), float64(av.Ontunetime)))
+			max_data.Pid = int(math.Max(float64(max_data.Pid), float64(av.Pid)))
+			max_data.Ppid = int(math.Max(float64(max_data.Ppid), float64(av.Ppid)))
+			max_data.Uid = int(math.Max(float64(max_data.Uid), float64(av.Uid)))
+			max_data.Usr = int(math.Max(float64(max_data.Usr), float64(av.Usr)))
+			max_data.Sys = int(math.Max(float64(max_data.Sys), float64(av.Sys)))
+			max_data.Usrsys = int(math.Max(float64(max_data.Usrsys), float64(av.Usrsys)))
+			max_data.Sz = int(math.Max(float64(max_data.Sz), float64(av.Sz)))
+			max_data.Rss = int(math.Max(float64(max_data.Rss), float64(av.Rss)))
+			max_data.Vmem = int(math.Max(float64(max_data.Vmem), float64(av.Vmem)))
+			max_data.Chario = int(math.Max(float64(max_data.Chario), float64(av.Chario)))
+			max_data.Processcnt = int(math.Max(float64(max_data.Processcnt), float64(av.Processcnt)))
+			max_data.Threadcnt = int(math.Max(float64(max_data.Threadcnt), float64(av.Threadcnt)))
+			max_data.Handlecnt = int(math.Max(float64(max_data.Handlecnt), float64(av.Handlecnt)))
+			max_data.Stime = int(math.Max(float64(max_data.Stime), float64(av.Stime)))
+			max_data.Pvbytes = int(math.Max(float64(max_data.Pvbytes), float64(av.Pvbytes)))
+			max_data.Pgpool = int(math.Max(float64(max_data.Pgpool), float64(av.Pgpool)))
+		}
+		if value_len := len(value.([]*data.Pid)); value_len > 0 {
+			avg_data.Usr = avg_data.Usr / value_len
+			avg_data.Sys = avg_data.Sys / value_len
+			avg_data.Usrsys = avg_data.Usrsys / value_len
+			avg_data.Sz = avg_data.Sz / value_len
+			avg_data.Rss = avg_data.Rss / value_len
+			avg_data.Vmem = avg_data.Vmem / value_len
+			avg_data.Chario = avg_data.Chario / value_len
+			avg_data.Processcnt = avg_data.Processcnt / value_len
+			avg_data.Threadcnt = avg_data.Threadcnt / value_len
+			avg_data.Handlecnt = avg_data.Handlecnt / value_len
+			avg_data.Stime = avg_data.Stime / value_len
+			avg_data.Pvbytes = avg_data.Pvbytes / value_len
+			avg_data.Pgpool = avg_data.Pgpool / value_len
+		}
+		agent_proc = append(agent_proc, avg_data)
+		max_proc = append(agent_proc, max_data)
+
+		return true
+	})
+
+	GlobalChannel.DemoAvgProcData <- agent_proc
+	GlobalChannel.DemoAvgMaxProcData <- max_proc
+	time.Sleep(time.Millisecond * time.Duration(1))
+
+	// Init
+	d.AvgProc = &sync.Map{}
 }

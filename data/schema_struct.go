@@ -6,11 +6,11 @@ type Agentinfo struct {
 	Enabled           int
 	Connected         int
 	Updated           int
-	Shorttermbasic    int
+	Shorttermperf     int
 	Shorttermproc     int
 	Shorttermio       int
 	Shorttermcpu      int
-	Longtermbasic     int
+	Longtermperf      int
 	Longtermproc      int
 	Longtermio        int
 	Longtermcpu       int
@@ -24,7 +24,7 @@ type Agentinfo struct {
 	Timecheck         int
 	Disconnectedtime  int64
 	Skipdatatypes     int
-	Virbasicperf      int
+	Virperf           int
 	Hypervisor        int
 	Serviceevent      string
 	Installdate       int64
@@ -58,7 +58,7 @@ type Hostinfo struct {
 	Numanodecount  int
 }
 
-type Basicperf struct {
+type Perf struct {
 	Ontunetime       int64
 	Agenttime        int64
 	Agentid          int
@@ -120,38 +120,51 @@ type Basicperf struct {
 	Dusm             int
 }
 
-type Procperf struct {
-	Ontunetime    int64
-	Agentid       int
-	Hostname      string
-	User          int
-	Sys           int
-	Wait          int
-	Idle          int
-	Memoryused    int
-	Filecache     int
-	Memorysize    int
-	Avm           int
-	Swapused      int
-	Swapsize      int
-	Diskiorate    int
-	Networkiorate int
-	Topproc       string
-	Topuser       string
-	Topproccount  int
-	Topcpu        int
-	Topdisk       string
-	Topvg         string
-	Topbusy       int
-	Maxcpu        int
-	Maxmem        int
-	Maxswap       int
-	Maxdisk       int
-	Diskiops      int
-	Networkiops   int
+type Pid struct {
+	Ontunetime int64
+	Agenttime  int64
+	Agentid    int
+	Pid        int
+	Ppid       int
+	Uid        int
+	Cmdid      int
+	Userid     int
+	Argid      int
+	Usr        int
+	Sys        int
+	Usrsys     int
+	Sz         int
+	Rss        int
+	Vmem       int
+	Chario     int
+	Processcnt int
+	Threadcnt  int
+	Handlecnt  int
+	Stime      int
+	Pvbytes    int
+	Pgpool     int
 }
 
-type Diskperf struct {
+type Proc struct {
+	Ontunetime int64
+	Agenttime  int64
+	Agentid    int
+	Cmdid      int
+	Userid     int
+	Usr        int
+	Sys        int
+	Usrsys     int
+	Sz         int
+	Rss        int
+	Vmem       int
+	Chario     int
+	Processcnt int
+	Threadcnt  int
+	Pvbytes    int
+	Pgpool     int
+}
+
+type Disk struct {
 	Ontunetime   int64
 	Agenttime    int64
 	Agentid      int
@@ -165,7 +178,7 @@ type Diskperf struct {
 	Writesvctime int
 }
 
-type Netperf struct {
+type Net struct {
 	Ontunetime int64
 	Agenttime  int64
 	Agentid    int
@@ -178,7 +191,7 @@ type Netperf struct {
 	Collision  int
 }
 
-type Cpuperf struct {
+type Cpu struct {
 	Ontunetime    int64
 	Agenttime     int64
 	Agentid       int

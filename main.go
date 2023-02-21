@@ -34,41 +34,56 @@ func main() {
 
 	go process_handler.ProcessData()
 	go process_handler.RequestAvgData(hostintervals)
-	go demo_handler.GenerateBasicPerf(hostintervals.Perf)
-	go demo_handler.GenerateCpuPerf(hostintervals.CPU)
-	go demo_handler.GenerateDiskPerf(hostintervals.Disk)
-	go demo_handler.GenerateNetPerf(hostintervals.Net)
+	go demo_handler.GeneratePerf(hostintervals.Perf)
+	go demo_handler.GenerateCpu(hostintervals.CPU)
+	go demo_handler.GenerateDisk(hostintervals.Disk)
+	go demo_handler.GenerateNet(hostintervals.Net)
+	go demo_handler.GenerateProc(hostintervals.Proc)
 
 	for {
 		select {
-		case basic_data := <-app.GlobalChannel.DemoBasicData:
-			process_handler.ReceiveBasicPerf(basic_data)
-		case avg_basic_data := <-app.GlobalChannel.DemoAvgBasicData:
-			process_handler.ReceiveAvgBasicPerf(avg_basic_data)
+		case perf_data := <-app.GlobalChannel.DemoPerfData:
+			process_handler.ReceivePerf(perf_data)
+		case avg_perf_data := <-app.GlobalChannel.DemoAvgPerfData:
+			process_handler.ReceiveAvgPerf(avg_perf_data, "avgperf")
+		case avgmax_perf_data := <-app.GlobalChannel.DemoAvgMaxPerfData:
+			process_handler.ReceiveAvgPerf(avgmax_perf_data, "avgmaxperf")
 		case cpu_data := <-app.GlobalChannel.DemoCpuData:
-			process_handler.ReceiveCpuPerf(cpu_data)
+			process_handler.ReceiveCpu(cpu_data)
 		case avg_cpu_data := <-app.GlobalChannel.DemoAvgCpuData:
-			process_handler.ReceiveAvgCpuPerf(avg_cpu_data)
+			process_handler.ReceiveAvgCpu(avg_cpu_data, "avgcpu")
+		case avgmax_cpu_data := <-app.GlobalChannel.DemoAvgMaxCpuData:
+			process_handler.ReceiveAvgCpu(avgmax_cpu_data, "avgmaxcpu")
 		case disk_data := <-app.GlobalChannel.DemoDiskData:
-			process_handler.ReceiveDiskPerf(disk_data)
+			process_handler.ReceiveDisk(disk_data)
 		case avg_disk_data := <-app.GlobalChannel.DemoAvgDiskData:
-			process_handler.ReceiveAvgDiskPerf(avg_disk_data)
+			process_handler.ReceiveAvgDisk(avg_disk_data, "avgdisk")
+		case avgmax_disk_data := <-app.GlobalChannel.DemoAvgMaxDiskData:
+			process_handler.ReceiveAvgDisk(avgmax_disk_data, "avgmaxdisk")
 		case net_data := <-app.GlobalChannel.DemoNetData:
-			process_handler.ReceiveNetPerf(net_data)
+			process_handler.ReceiveNet(net_data)
 		case avg_net_data := <-app.GlobalChannel.DemoAvgNetData:
-			process_handler.ReceiveAvgNetPerf(avg_net_data)
+			process_handler.ReceiveAvgNet(avg_net_data, "avgnet")
+		case avgmax_net_data := <-app.GlobalChannel.DemoAvgMaxNetData:
+			process_handler.ReceiveAvgNet(avgmax_net_data, "avgmaxnet")
+		case proc_data := <-app.GlobalChannel.DemoProcData:
+			process_handler.ReceiveProc(proc_data)
+		case avg_proc_data := <-app.GlobalChannel.DemoAvgProcData:
+			process_handler.ReceiveAvgProc(avg_proc_data, "avgpid")
+		case avgmax_proc_data := <-app.GlobalChannel.DemoAvgMaxProcData:
+			process_handler.ReceiveAvgProc(avgmax_proc_data, "avgmaxpid")
 		case request_avg_flag := <-app.GlobalChannel.AverageRequest:
 			switch request_avg_flag {
-			case "basic":
-				go demo_handler.GenerateAvgBasicPerf()
+			case "perf":
+				go demo_handler.GenerateAvgPerf()
 			case "proc":
-				fmt.Println("proc")
+				go demo_handler.GenerateAvgProc()
 			case "disk":
-				go demo_handler.GenerateAvgDiskPerf()
+				go demo_handler.GenerateAvgDisk()
 			case "net":
-				go demo_handler.GenerateAvgNetPerf()
+				go demo_handler.GenerateAvgNet()
 			case "cpu":
-				go demo_handler.GenerateAvgCpuPerf()
+				go demo_handler.GenerateAvgCpu()
 			}
 		case agent_data := <-app.GlobalChannel.AgentData:
 			// Deep Copy

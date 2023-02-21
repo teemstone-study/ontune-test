@@ -1,7 +1,10 @@
 package app
 
 import (
+	"fmt"
 	"log"
+	"math"
+	"math/rand"
 	"mgr/data"
 	"os"
 	"sync"
@@ -9,13 +12,14 @@ import (
 )
 
 const (
-	DEBUG_FLAG      = false
-	TIME_DEBUG_FLAG = false
-	LASTPERF_TIMER  = 60
-	PROCESS_TIMER   = 1
-	MAX_THREAD      = 8
-	DATE_FORMAT     = "06010215"
-	CPU_CORE        = 4
+	DEBUG_FLAG         = false
+	TIME_DEBUG_FLAG    = false
+	LASTPERF_TIMER     = 60
+	PROCESS_TIMER      = 1
+	MAX_THREAD         = 8
+	HOURLY_DATE_FORMAT = "06010215"
+	DAILY_DATE_FORMAT  = "06010200"
+	CPU_CORE           = 4
 )
 
 var (
@@ -23,26 +27,9 @@ var (
 	GlobalOntunetime   int64          = time.Now().Unix()
 	GlobalOntunetimets time.Time      = time.Now()
 	AgentDataProcess   *sync.Map      = &sync.Map{}
-	DISK_IONAME        map[int]string = map[int]string{
-		0: "total",
-		1: "C:",
-		2: "D:",
-	}
-	NET_IONAME map[int]string = map[int]string{
-		0: "total",
-		3: "Intel[R] Ethernet Connection [7] I219-LM",
-		4: "Teredo Tunneling Pseudo-Interface",
-	}
-
-	DEVICE_IDS    []string = []string{"total", "C:", "D:", "Intel[R] Ethernet Connection [7] I219-LM", "Teredo Tunneling Pseudo-Interface"}
-	VOLUME_GROUPS []string = []string{
-		"NULL", "", "rootvg", "None", "N/A", "vg_linux63x8664", "caavg_private", "ProLinux-vg", "centos", "vg_centos62x8664",
-		"VolGroup00", "vg_centos67", "vg_oraclelinux69", "ubuntu64", "VG_XenStorage-628ef03e-1cf7-cd4", "XSLocalEXT-a4fc36e8-ca45-6f11-c", "vg_centos6", "vg00",
-		"prolinux", "gpfs1", "gpfs2", "freedisk", "centos_centos7kvm", "centos_numatest", "debian8-vg", "vg_data",
-		"ontubun1604-vg", "2a-ce75126bbade", "rhel", "centos_k8snode1", "centos_master", "zabbix-vg", "cl_centos8", "old_rootvg",
-		"DSS0", "dg1", "dg2", "XSLocalEXT-86d07858-845c-9433-3", "prchfpdg1", "prchfpdg2", "cl_justin", "d1home",
-		"d2home", "testvg02", "testvg03", "testvg04", "testvg05", "testvg06", "testvg07", "testvg01",
-	}
+	PROCCMD_ARR        []int          = []int{rand.Intn(len(data.PROCCMD_DATA)), rand.Intn(len(data.PROCCMD_DATA)), rand.Intn(len(data.PROCCMD_DATA))}
+	PROCUSER_ARR       []int          = []int{rand.Intn(len(data.PROCCMD_DATA))}
+	PROCARG_ARR        []int          = []int{rand.Intn(len(data.PROCCMD_DATA)), rand.Intn(len(data.PROCCMD_DATA)), rand.Intn(len(data.PROCCMD_DATA))}
 )
 
 type Bitmask uint32
@@ -52,14 +39,21 @@ func (value Bitmask) IsSet(key Bitmask) bool {
 }
 
 type ChannelStruct struct {
-	DemoBasicData      chan []*data.Basicperf
-	DemoAvgBasicData   chan []*data.Basicperf
-	DemoCpuData        chan []*data.Cpuperf
-	DemoAvgCpuData     chan []*data.Cpuperf
-	DemoDiskData       chan []*data.Diskperf
-	DemoAvgDiskData    chan []*data.Diskperf
-	DemoNetData        chan []*data.Netperf
-	DemoAvgNetData     chan []*data.Netperf
+	DemoPerfData       chan []*data.Perf
+	DemoAvgPerfData    chan []*data.Perf
+	DemoAvgMaxPerfData chan []*data.Perf
+	DemoCpuData        chan []*data.Cpu
+	DemoAvgCpuData     chan []*data.Cpu
+	DemoAvgMaxCpuData  chan []*data.Cpu
+	DemoDiskData       chan []*data.Disk
+	DemoAvgDiskData    chan []*data.Disk
+	DemoAvgMaxDiskData chan []*data.Disk
+	DemoNetData        chan []*data.Net
+	DemoAvgNetData     chan []*data.Net
+	DemoAvgMaxNetData  chan []*data.Net
+	DemoProcData       chan []*data.Pid
+	DemoAvgProcData    chan []*data.Pid
+	DemoAvgMaxProcData chan []*data.Pid
 	AverageRequest     chan string
 	AgentData          chan *sync.Map
 	LastPerfData       chan *sync.Map
@@ -71,14 +65,21 @@ type ChannelStruct struct {
 
 var (
 	GlobalChannel ChannelStruct = ChannelStruct{
-		DemoBasicData:      make(chan []*data.Basicperf),
-		DemoAvgBasicData:   make(chan []*data.Basicperf),
-		DemoCpuData:        make(chan []*data.Cpuperf),
-		DemoAvgCpuData:     make(chan []*data.Cpuperf),
-		DemoDiskData:       make(chan []*data.Diskperf),
-		DemoAvgDiskData:    make(chan []*data.Diskperf),
-		DemoNetData:        make(chan []*data.Netperf),
-		DemoAvgNetData:     make(chan []*data.Netperf),
+		DemoPerfData:       make(chan []*data.Perf),
+		DemoAvgPerfData:    make(chan []*data.Perf),
+		DemoAvgMaxPerfData: make(chan []*data.Perf),
+		DemoCpuData:        make(chan []*data.Cpu),
+		DemoAvgCpuData:     make(chan []*data.Cpu),
+		DemoAvgMaxCpuData:  make(chan []*data.Cpu),
+		DemoDiskData:       make(chan []*data.Disk),
+		DemoAvgDiskData:    make(chan []*data.Disk),
+		DemoAvgMaxDiskData: make(chan []*data.Disk),
+		DemoNetData:        make(chan []*data.Net),
+		DemoAvgNetData:     make(chan []*data.Net),
+		DemoAvgMaxNetData:  make(chan []*data.Net),
+		DemoProcData:       make(chan []*data.Pid),
+		DemoAvgProcData:    make(chan []*data.Pid),
+		DemoAvgMaxProcData: make(chan []*data.Pid),
 		AverageRequest:     make(chan string),
 		AgentData:          make(chan *sync.Map),
 		LastPerfData:       make(chan *sync.Map),
@@ -92,8 +93,15 @@ var (
 func LogWrite(log_type string, data string) {
 	var file *os.File
 	var err error
+
+	if !DEBUG_FLAG && log_type == "debug" {
+		return
+	}
+
 	switch log_type {
 	case "log":
+		file, err = os.OpenFile("ontuneLog.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	case "debug":
 		file, err = os.OpenFile("ontuneLog.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	case "error":
 		file, err = os.OpenFile("error.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -175,4 +183,39 @@ func CopyMap(src *sync.Map) *sync.Map {
 		return true
 	})
 	return &tgt
+}
+
+func MakeProc(pid_data []*data.Pid) []*data.Proc {
+	proc_map := &sync.Map{}
+	proc_data := make([]*data.Proc, 0)
+
+	for _, p := range pid_data {
+		key := fmt.Sprintf("%d_%d_%d", p.Agentid, p.Cmdid, p.Userid)
+		if pmap, ok := proc_map.LoadOrStore(key, &data.Proc{}); ok {
+			pmap_struct := pmap.(*data.Proc)
+			pmap_struct.Ontunetime = int64(math.Max(float64(pmap_struct.Ontunetime), float64(p.Ontunetime)))
+			pmap_struct.Agenttime = int64(math.Max(float64(pmap_struct.Agenttime), float64(p.Agenttime)))
+			pmap_struct.Agentid = p.Agentid
+			pmap_struct.Cmdid = p.Cmdid
+			pmap_struct.Userid = p.Userid
+			pmap_struct.Usr += p.Usr
+			pmap_struct.Sys += p.Sys
+			pmap_struct.Usrsys += p.Usrsys
+			pmap_struct.Sz += p.Sz
+			pmap_struct.Rss += p.Rss
+			pmap_struct.Vmem += p.Vmem
+			pmap_struct.Chario += p.Chario
+			pmap_struct.Processcnt += p.Processcnt
+			pmap_struct.Threadcnt += p.Threadcnt
+			pmap_struct.Pvbytes += p.Pvbytes
+			pmap_struct.Pgpool += p.Pgpool
+		}
+	}
+
+	proc_map.Range(func(key, value any) bool {
+		proc_data = append(proc_data, value.(*data.Proc))
+		return true
+	})
+
+	return proc_data
 }

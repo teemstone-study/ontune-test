@@ -50,11 +50,11 @@ CREATE TABLE IF NOT EXISTS public.agentinfo (
 	_enabled integer NULL,		
 	_connected integer NULL,		
 	_updated integer NULL,		
-	_shorttermbasic integer NULL,
+	_shorttermperf integer NULL,
 	_shorttermproc integer NULL,		
 	_shorttermio integer NULL,		
 	_shorttermcpu integer NULL,		
-	_longtermbasic integer NULL,		
+	_longtermperf integer NULL,		
 	_longtermproc integer NULL,		
 	_longtermio integer NULL,		
 	_longtermcpu integer NULL,		
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS public.agentinfo (
 	_timecheck integer NULL,		
 	_disconnectedtime int8 NULL,		
 	_skipdatatypes integer NULL,		
-	_virbasicperf integer NULL,		
+	_virperf integer NULL,		
 	_hypervisor integer NULL,		
 	_serviceevent text NULL,		
 	_installdate int8 NULL,		
@@ -314,6 +314,63 @@ CREATE TABLE IF NOT EXISTS public.%[1]s (
 CREATE INDEX IF NOT EXISTS %[1]s_idx ON public.%[1]s USING btree (_ontunetime, _agentid);
 `
 
+var MetricPidStmt = `
+CREATE TABLE IF NOT EXISTS public.%[1]s (			
+	_ontunetime	%[2]s NOT NULL,
+	_agenttime	integer NULL,
+	_agentid	integer NULL,
+	_pid        integer NULL,
+	_ppid       integer NULL,
+	_uid        integer NULL,
+	_cmdid      integer NULL,
+	_userid     integer NULL,
+	_argid      integer NULL,
+	_usr        integer NULL,
+	_sys        integer NULL,
+	_usrsys     integer NULL,
+	_sz         integer NULL,
+	_rss        integer NULL,
+	_vmem       integer NULL,
+	_chario     integer NULL,
+	_processcnt integer NULL,
+	_threadcnt  integer NULL,
+	_handlecnt  integer NULL,
+	_stime      integer NULL,
+	_pvbytes    integer NULL,
+	_pgpool     integer NULL
+);
+CREATE INDEX IF NOT EXISTS %[1]s_idx ON public.%[1]s USING btree (_ontunetime, _agentid);
+`
+
+var MetricProcStmt = `
+CREATE TABLE IF NOT EXISTS public.%[1]s (			
+	_ontunetime	%[2]s NOT NULL,
+	_agenttime	integer NULL,
+	_agentid	integer NULL,
+	_cmdid      integer NULL,
+	_userid     integer NULL,
+	_usr        integer NULL,
+	_sys        integer NULL,
+	_usrsys     integer NULL,
+	_sz         integer NULL,
+	_rss        integer NULL,
+	_vmem       integer NULL,
+	_chario     integer NULL,
+	_processcnt integer NULL,
+	_threadcnt  integer NULL,
+	_pvbytes    integer NULL,
+	_pgpool     integer NULL
+);
+CREATE INDEX IF NOT EXISTS %[1]s_idx ON public.%[1]s USING btree (_ontunetime, _agentid);
+`
+
 var MetricHypertable = `
 select create_hypertable('%s','_ontunetime', chunk_time_interval => interval '1 day');
+`
+
+var RefStmt = `
+CREATE TABLE IF NOT EXISTS public.%s (	
+	_id serial NOT NULL PRIMARY KEY,
+	_name text NULL
+);
 `

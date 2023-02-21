@@ -23,3 +23,7 @@ TRUNCATE deviceid
 var TruncateDescid = `
 TRUNCATE descid
 `
+
+var TruncateRef = `
+TRUNCATE %s
+`
