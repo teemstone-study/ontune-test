@@ -186,6 +186,22 @@ func (a *HostinfoArr) GetArgs() []interface{} {
 	return data
 }
 
+func InsertOntunetime(dbtype string, otarray []int64) []interface{} {
+	data := make([]interface{}, 0)
+
+	if dbtype == "pg" {
+		data = append(data, pq.Array(otarray))
+	} else if dbtype == "ts" {
+		var ontunetimets []time.Time = make([]time.Time, 0)
+		for _, ot := range otarray {
+			ontunetimets = append(ontunetimets, time.Unix(ot, 0))
+		}
+		data = append(data, pq.Array(ontunetimets))
+	}
+
+	return data
+}
+
 type BasicperfArr struct {
 	Ontunetime       []int64
 	Agenttime        []int64
@@ -311,17 +327,7 @@ func (a *BasicperfArr) SetData(b Basicperf) {
 }
 
 func (a *BasicperfArr) GetArgs(dbtype string) []interface{} {
-	data := make([]interface{}, 0)
-
-	if dbtype == "pg" {
-		data = append(data, pq.Array(a.Ontunetime))
-	} else if dbtype == "ts" {
-		var ontunetimets []time.Time = make([]time.Time, 0)
-		for _, ot := range a.Ontunetime {
-			ontunetimets = append(ontunetimets, time.Unix(ot, 0))
-		}
-		data = append(data, pq.Array(ontunetimets))
-	}
+	data := InsertOntunetime(dbtype, a.Ontunetime)
 	data = append(data, pq.Array(a.Agenttime))
 	data = append(data, pq.Array(a.Agentid))
 	data = append(data, pq.Array(a.User))
@@ -446,9 +452,8 @@ func (a *ProcperffArr) SetData(p Procperf) {
 	a.Networkiops = append(a.Networkiops, p.Networkiops)
 }
 
-func (a *ProcperffArr) GetArgs() []interface{} {
-	data := make([]interface{}, 0)
-	data = append(data, pq.Array(a.Ontunetime))
+func (a *ProcperffArr) GetArgs(dbtype string) []interface{} {
+	data := InsertOntunetime(dbtype, a.Ontunetime)
 	data = append(data, pq.Array(a.Agentid))
 	data = append(data, pq.StringArray(a.Hostname))
 	data = append(data, pq.Array(a.User))
@@ -480,194 +485,140 @@ func (a *ProcperffArr) GetArgs() []interface{} {
 	return data
 }
 
-type IoperfArr struct {
-	Ontunetime    []int64
-	Agentid       []int
-	Hostname      []string
-	User          []int
-	Sys           []int
-	Wait          []int
-	Idle          []int
-	Memoryused    []int
-	Filecache     []int
-	Memorysize    []int
-	Avm           []int
-	Swapused      []int
-	Swapsize      []int
-	Diskiorate    []int
-	Networkiorate []int
-	Topproc       []string
-	Topuser       []string
-	Topproccount  []int
-	Topcpu        []int
-	Topdisk       []string
-	Topvg         []string
-	Topbusy       []int
-	Maxcpu        []int
-	Maxmem        []int
-	Maxswap       []int
-	Maxdisk       []int
-	Diskiops      []int
-	Networkiops   []int
+type DiskperfArr struct {
+	Ontunetime   []int64
+	Agenttime    []int64
+	Agentid      []int
+	Ionameid     []int
+	Readrate     []int
+	Writerate    []int
+	Iops         []int
+	Busy         []int
+	Descid       []int
+	Readsvctime  []int
+	Writesvctime []int
 }
 
-func (a *IoperfArr) SetData(i Ioperf) {
-	a.Ontunetime = append(a.Ontunetime, i.Ontunetime)
-	a.Agentid = append(a.Agentid, i.Agentid)
-	a.Hostname = append(a.Hostname, i.Hostname)
-	a.User = append(a.User, i.User)
-	a.Sys = append(a.Sys, i.Sys)
-	a.Wait = append(a.Wait, i.Wait)
-	a.Idle = append(a.Idle, i.Idle)
-	a.Memoryused = append(a.Memoryused, i.Memoryused)
-	a.Filecache = append(a.Filecache, i.Filecache)
-	a.Memorysize = append(a.Memorysize, i.Memorysize)
-	a.Avm = append(a.Avm, i.Avm)
-	a.Swapused = append(a.Swapused, i.Swapused)
-	a.Swapsize = append(a.Swapsize, i.Swapsize)
-	a.Diskiorate = append(a.Diskiorate, i.Diskiorate)
-	a.Networkiorate = append(a.Networkiorate, i.Networkiorate)
-	a.Topproc = append(a.Topproc, i.Topproc)
-	a.Topuser = append(a.Topuser, i.Topuser)
-	a.Topproccount = append(a.Topproccount, i.Topproccount)
-	a.Topcpu = append(a.Topcpu, i.Topcpu)
-	a.Topdisk = append(a.Topdisk, i.Topdisk)
-	a.Topvg = append(a.Topvg, i.Topvg)
-	a.Topbusy = append(a.Topbusy, i.Topbusy)
-	a.Maxcpu = append(a.Maxcpu, i.Maxcpu)
-	a.Maxmem = append(a.Maxmem, i.Maxmem)
-	a.Maxswap = append(a.Maxswap, i.Maxswap)
-	a.Maxdisk = append(a.Maxdisk, i.Maxdisk)
-	a.Diskiops = append(a.Diskiops, i.Diskiops)
-	a.Networkiops = append(a.Networkiops, i.Networkiops)
+func (a *DiskperfArr) SetData(d Diskperf) {
+	a.Ontunetime = append(a.Ontunetime, d.Ontunetime)
+	a.Agenttime = append(a.Agenttime, d.Agenttime)
+	a.Agentid = append(a.Agentid, d.Agentid)
+	a.Ionameid = append(a.Ionameid, d.Ionameid)
+	a.Readrate = append(a.Readrate, d.Readrate)
+	a.Writerate = append(a.Writerate, d.Writerate)
+	a.Iops = append(a.Iops, d.Iops)
+	a.Busy = append(a.Busy, d.Busy)
+	a.Descid = append(a.Descid, d.Descid)
+	a.Readsvctime = append(a.Readsvctime, d.Readsvctime)
+	a.Writesvctime = append(a.Writesvctime, d.Writesvctime)
 }
 
-func (a *IoperfArr) GetArgs() []interface{} {
-	data := make([]interface{}, 0)
-	data = append(data, pq.Array(a.Ontunetime))
+func (a *DiskperfArr) GetArgs(dbtype string) []interface{} {
+	data := InsertOntunetime(dbtype, a.Ontunetime)
+	data = append(data, pq.Array(a.Agenttime))
 	data = append(data, pq.Array(a.Agentid))
-	data = append(data, pq.StringArray(a.Hostname))
-	data = append(data, pq.Array(a.User))
-	data = append(data, pq.Array(a.Sys))
-	data = append(data, pq.Array(a.Wait))
-	data = append(data, pq.Array(a.Idle))
-	data = append(data, pq.Array(a.Memoryused))
-	data = append(data, pq.Array(a.Filecache))
-	data = append(data, pq.Array(a.Memorysize))
-	data = append(data, pq.Array(a.Avm))
-	data = append(data, pq.Array(a.Swapused))
-	data = append(data, pq.Array(a.Swapsize))
-	data = append(data, pq.Array(a.Diskiorate))
-	data = append(data, pq.Array(a.Networkiorate))
-	data = append(data, pq.StringArray(a.Topproc))
-	data = append(data, pq.StringArray(a.Topuser))
-	data = append(data, pq.Array(a.Topproccount))
-	data = append(data, pq.Array(a.Topcpu))
-	data = append(data, pq.StringArray(a.Topdisk))
-	data = append(data, pq.StringArray(a.Topvg))
-	data = append(data, pq.Array(a.Topbusy))
-	data = append(data, pq.Array(a.Maxcpu))
-	data = append(data, pq.Array(a.Maxmem))
-	data = append(data, pq.Array(a.Maxswap))
-	data = append(data, pq.Array(a.Maxdisk))
-	data = append(data, pq.Array(a.Diskiops))
-	data = append(data, pq.Array(a.Networkiops))
+	data = append(data, pq.Array(a.Ionameid))
+	data = append(data, pq.Array(a.Readrate))
+	data = append(data, pq.Array(a.Writerate))
+	data = append(data, pq.Array(a.Iops))
+	data = append(data, pq.Array(a.Busy))
+	data = append(data, pq.Array(a.Descid))
+	data = append(data, pq.Array(a.Readsvctime))
+	data = append(data, pq.Array(a.Writesvctime))
+
+	return data
+}
+
+type NetperfArr struct {
+	Ontunetime []int64
+	Agenttime  []int64
+	Agentid    []int
+	Ionameid   []int
+	Readrate   []int
+	Writerate  []int
+	Readiops   []int
+	Writeiops  []int
+	Errorps    []int
+	Collision  []int
+}
+
+func (a *NetperfArr) SetData(n Netperf) {
+	a.Ontunetime = append(a.Ontunetime, n.Ontunetime)
+	a.Agenttime = append(a.Agenttime, n.Agenttime)
+	a.Agentid = append(a.Agentid, n.Agentid)
+	a.Ionameid = append(a.Ionameid, n.Ionameid)
+	a.Readrate = append(a.Readrate, n.Readrate)
+	a.Writerate = append(a.Writerate, n.Writerate)
+	a.Readiops = append(a.Readiops, n.Readiops)
+	a.Writeiops = append(a.Writeiops, n.Writeiops)
+	a.Errorps = append(a.Errorps, n.Errorps)
+	a.Collision = append(a.Collision, n.Collision)
+}
+
+func (a *NetperfArr) GetArgs(dbtype string) []interface{} {
+	data := InsertOntunetime(dbtype, a.Ontunetime)
+	data = append(data, pq.Array(a.Agenttime))
+	data = append(data, pq.Array(a.Agentid))
+	data = append(data, pq.Array(a.Ionameid))
+	data = append(data, pq.Array(a.Readrate))
+	data = append(data, pq.Array(a.Writerate))
+	data = append(data, pq.Array(a.Readiops))
+	data = append(data, pq.Array(a.Writeiops))
+	data = append(data, pq.Array(a.Errorps))
+	data = append(data, pq.Array(a.Collision))
 
 	return data
 }
 
 type CpuperfArr struct {
 	Ontunetime    []int64
+	Agenttime     []int64
 	Agentid       []int
-	Hostname      []string
+	Index         []int
 	User          []int
 	Sys           []int
 	Wait          []int
 	Idle          []int
-	Memoryused    []int
-	Filecache     []int
-	Memorysize    []int
-	Avm           []int
-	Swapused      []int
-	Swapsize      []int
-	Diskiorate    []int
-	Networkiorate []int
-	Topproc       []string
-	Topuser       []string
-	Topproccount  []int
-	Topcpu        []int
-	Topdisk       []string
-	Topvg         []string
-	Topbusy       []int
-	Maxcpu        []int
-	Maxmem        []int
-	Maxswap       []int
-	Maxdisk       []int
-	Diskiops      []int
-	Networkiops   []int
+	Runqueue      []int
+	Fork          []int
+	Exec          []int
+	Interupt      []int
+	Systemcall    []int
+	Contextswitch []int
 }
 
 func (a *CpuperfArr) SetData(c Cpuperf) {
 	a.Ontunetime = append(a.Ontunetime, c.Ontunetime)
+	a.Agenttime = append(a.Agenttime, c.Agenttime)
 	a.Agentid = append(a.Agentid, c.Agentid)
-	a.Hostname = append(a.Hostname, c.Hostname)
+	a.Index = append(a.Index, c.Index)
 	a.User = append(a.User, c.User)
 	a.Sys = append(a.Sys, c.Sys)
 	a.Wait = append(a.Wait, c.Wait)
 	a.Idle = append(a.Idle, c.Idle)
-	a.Memoryused = append(a.Memoryused, c.Memoryused)
-	a.Filecache = append(a.Filecache, c.Filecache)
-	a.Memorysize = append(a.Memorysize, c.Memorysize)
-	a.Avm = append(a.Avm, c.Avm)
-	a.Swapused = append(a.Swapused, c.Swapused)
-	a.Swapsize = append(a.Swapsize, c.Swapsize)
-	a.Diskiorate = append(a.Diskiorate, c.Diskiorate)
-	a.Networkiorate = append(a.Networkiorate, c.Networkiorate)
-	a.Topproc = append(a.Topproc, c.Topproc)
-	a.Topuser = append(a.Topuser, c.Topuser)
-	a.Topproccount = append(a.Topproccount, c.Topproccount)
-	a.Topcpu = append(a.Topcpu, c.Topcpu)
-	a.Topdisk = append(a.Topdisk, c.Topdisk)
-	a.Topvg = append(a.Topvg, c.Topvg)
-	a.Topbusy = append(a.Topbusy, c.Topbusy)
-	a.Maxcpu = append(a.Maxcpu, c.Maxcpu)
-	a.Maxmem = append(a.Maxmem, c.Maxmem)
-	a.Maxswap = append(a.Maxswap, c.Maxswap)
-	a.Maxdisk = append(a.Maxdisk, c.Maxdisk)
-	a.Diskiops = append(a.Diskiops, c.Diskiops)
-	a.Networkiops = append(a.Networkiops, c.Networkiops)
+	a.Runqueue = append(a.Runqueue, c.Runqueue)
+	a.Fork = append(a.Fork, c.Fork)
+	a.Exec = append(a.Exec, c.Exec)
+	a.Interupt = append(a.Interupt, c.Interupt)
+	a.Systemcall = append(a.Systemcall, c.Systemcall)
+	a.Contextswitch = append(a.Contextswitch, c.Contextswitch)
 }
 
-func (a *CpuperfArr) GetArgs() []interface{} {
-	data := make([]interface{}, 0)
-	data = append(data, pq.Array(a.Ontunetime))
+func (a *CpuperfArr) GetArgs(dbtype string) []interface{} {
+	data := InsertOntunetime(dbtype, a.Ontunetime)
+	data = append(data, pq.Array(a.Agenttime))
 	data = append(data, pq.Array(a.Agentid))
-	data = append(data, pq.StringArray(a.Hostname))
+	data = append(data, pq.Array(a.Index))
 	data = append(data, pq.Array(a.User))
 	data = append(data, pq.Array(a.Sys))
 	data = append(data, pq.Array(a.Wait))
 	data = append(data, pq.Array(a.Idle))
-	data = append(data, pq.Array(a.Memoryused))
-	data = append(data, pq.Array(a.Filecache))
-	data = append(data, pq.Array(a.Memorysize))
-	data = append(data, pq.Array(a.Avm))
-	data = append(data, pq.Array(a.Swapused))
-	data = append(data, pq.Array(a.Swapsize))
-	data = append(data, pq.Array(a.Diskiorate))
-	data = append(data, pq.Array(a.Networkiorate))
-	data = append(data, pq.StringArray(a.Topproc))
-	data = append(data, pq.StringArray(a.Topuser))
-	data = append(data, pq.Array(a.Topproccount))
-	data = append(data, pq.Array(a.Topcpu))
-	data = append(data, pq.StringArray(a.Topdisk))
-	data = append(data, pq.StringArray(a.Topvg))
-	data = append(data, pq.Array(a.Topbusy))
-	data = append(data, pq.Array(a.Maxcpu))
-	data = append(data, pq.Array(a.Maxmem))
-	data = append(data, pq.Array(a.Maxswap))
-	data = append(data, pq.Array(a.Maxdisk))
-	data = append(data, pq.Array(a.Diskiops))
-	data = append(data, pq.Array(a.Networkiops))
+	data = append(data, pq.Array(a.Runqueue))
+	data = append(data, pq.Array(a.Fork))
+	data = append(data, pq.Array(a.Exec))
+	data = append(data, pq.Array(a.Interupt))
+	data = append(data, pq.Array(a.Systemcall))
+	data = append(data, pq.Array(a.Contextswitch))
 
 	return data
 }

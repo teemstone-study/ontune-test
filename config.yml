@@ -21,10 +21,13 @@ host:
   proc:
     rate: 5
     avg: 600
-  io:
+  disk:
     rate: 5
     avg: 600
   cpu:
+    rate: 5
+    avg: 600
+  net:
     rate: 5
     avg: 600
 

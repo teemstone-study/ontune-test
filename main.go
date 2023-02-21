@@ -35,6 +35,9 @@ func main() {
 	go process_handler.ProcessData()
 	go process_handler.RequestAvgData(hostintervals)
 	go demo_handler.GenerateBasicPerf(hostintervals.Perf)
+	go demo_handler.GenerateCpuPerf(hostintervals.CPU)
+	go demo_handler.GenerateDiskPerf(hostintervals.Disk)
+	go demo_handler.GenerateNetPerf(hostintervals.Net)
 
 	for {
 		select {
@@ -42,12 +45,30 @@ func main() {
 			process_handler.ReceiveBasicPerf(basic_data)
 		case avg_basic_data := <-app.GlobalChannel.DemoAvgBasicData:
 			process_handler.ReceiveAvgBasicPerf(avg_basic_data)
+		case cpu_data := <-app.GlobalChannel.DemoCpuData:
+			process_handler.ReceiveCpuPerf(cpu_data)
+		case avg_cpu_data := <-app.GlobalChannel.DemoAvgCpuData:
+			process_handler.ReceiveAvgCpuPerf(avg_cpu_data)
+		case disk_data := <-app.GlobalChannel.DemoDiskData:
+			process_handler.ReceiveDiskPerf(disk_data)
+		case avg_disk_data := <-app.GlobalChannel.DemoAvgDiskData:
+			process_handler.ReceiveAvgDiskPerf(avg_disk_data)
+		case net_data := <-app.GlobalChannel.DemoNetData:
+			process_handler.ReceiveNetPerf(net_data)
+		case avg_net_data := <-app.GlobalChannel.DemoAvgNetData:
+			process_handler.ReceiveAvgNetPerf(avg_net_data)
 		case request_avg_flag := <-app.GlobalChannel.AverageRequest:
 			switch request_avg_flag {
 			case "basic":
 				go demo_handler.GenerateAvgBasicPerf()
 			case "proc":
 				fmt.Println("proc")
+			case "disk":
+				go demo_handler.GenerateAvgDiskPerf()
+			case "net":
+				go demo_handler.GenerateAvgNetPerf()
+			case "cpu":
+				go demo_handler.GenerateAvgCpuPerf()
 			}
 		case agent_data := <-app.GlobalChannel.AgentData:
 			// Deep Copy

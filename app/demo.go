@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/rand"
 	"mgr/data"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -15,12 +17,17 @@ type DemoHandler struct {
 	Agentinfo    data.AgentinfoArr
 	Hostinfo     data.HostinfoArr
 	AvgBasicPerf *sync.Map
+	AvgCpuPerf   *sync.Map
+	AvgDiskPerf  *sync.Map
+	AvgNetPerf   *sync.Map
 }
 
 func (d *DemoHandler) Init(hostcount int) {
 	d.Hostcount = hostcount
 	d.AvgBasicPerf = &sync.Map{}
-
+	d.AvgCpuPerf = &sync.Map{}
+	d.AvgDiskPerf = &sync.Map{}
+	d.AvgNetPerf = &sync.Map{}
 }
 
 func (d *DemoHandler) InitDemoAgentInfo() {
@@ -92,7 +99,7 @@ func (d *DemoHandler) InitDemoAgentInfo() {
 		hostinfo_arr.SetData(*demo_host_data)
 		d.Hostinfo = hostinfo_arr
 
-		MapHostifo[i+1] = fmt.Sprintf("DummyAgent%d", i+1)
+		MapHostInfo[i+1] = fmt.Sprintf("DummyAgent%d", i+1)
 	}
 }
 
@@ -313,4 +320,260 @@ func (d *DemoHandler) GenerateAvgBasicPerf() {
 
 	// Init
 	d.AvgBasicPerf = &sync.Map{}
+}
+
+func (d *DemoHandler) GenerateCpuPerf(interval ConfigScrape) {
+	for {
+		ts := time.Now().Unix()
+
+		var agent_cpuperf []*data.Cpuperf = make([]*data.Cpuperf, 0)
+		for i := 0; i < d.Hostcount; i++ {
+			for j := 0; j < CPU_CORE; j++ {
+				demo_data := &data.Cpuperf{
+					Ontunetime:    ts,
+					Agenttime:     ts,
+					Agentid:       d.Agentinfo.Agentid[i],
+					Index:         j,
+					User:          rand.Intn(100),
+					Sys:           rand.Intn(100),
+					Wait:          rand.Intn(100),
+					Idle:          rand.Intn(100),
+					Runqueue:      rand.Intn(100),
+					Fork:          rand.Intn(100),
+					Exec:          rand.Intn(100),
+					Interupt:      rand.Intn(100),
+					Systemcall:    rand.Intn(100),
+					Contextswitch: rand.Intn(100),
+				}
+				agent_cpuperf = append(agent_cpuperf, demo_data)
+
+				// Store Average Value
+				key := fmt.Sprintf("%d_%d", demo_data.Agentid, demo_data.Index)
+				if val, ok := d.AvgCpuPerf.LoadOrStore(key, make([]*data.Cpuperf, 0)); ok {
+					var avgvalue []*data.Cpuperf = make([]*data.Cpuperf, 0)
+					avgvalue = append(avgvalue, val.([]*data.Cpuperf)...)
+					d.AvgCpuPerf.Store(key, avgvalue)
+				}
+			}
+		}
+
+		GlobalChannel.DemoCpuData <- agent_cpuperf
+		time.Sleep(time.Second * time.Duration(interval.Rate))
+	}
+}
+
+func (d *DemoHandler) GenerateAvgCpuPerf() {
+	var agent_cpuperf []*data.Cpuperf = make([]*data.Cpuperf, 0)
+
+	d.AvgCpuPerf.Range(func(key, value any) bool {
+		slice := strings.Split(key.(string), "_")
+		agentid, err := strconv.Atoi(slice[0])
+		ErrorCheck(err)
+		index, err := strconv.Atoi(slice[1])
+		ErrorCheck(err)
+
+		avg_data := &data.Cpuperf{
+			Agentid: agentid,
+			Index:   index,
+		}
+		for _, av := range value.([]*data.Cpuperf) {
+			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(av.Ontunetime)))
+			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(av.Ontunetime)))
+			avg_data.User = avg_data.User + av.User
+			avg_data.Sys = avg_data.Sys + av.Sys
+			avg_data.Wait = avg_data.Wait + av.Wait
+			avg_data.Idle = avg_data.Idle + av.Idle
+			avg_data.Runqueue = avg_data.Runqueue + av.Runqueue
+			avg_data.Fork = avg_data.Fork + av.Fork
+			avg_data.Exec = avg_data.Exec + av.Exec
+			avg_data.Interupt = avg_data.Interupt + av.Interupt
+			avg_data.Systemcall = avg_data.Systemcall + av.Systemcall
+			avg_data.Contextswitch = avg_data.Contextswitch + av.Contextswitch
+		}
+		if value_len := len(value.([]*data.Cpuperf)); value_len > 0 {
+			avg_data.User = avg_data.User / value_len
+			avg_data.Sys = avg_data.Sys / value_len
+			avg_data.Wait = avg_data.Wait / value_len
+			avg_data.Idle = avg_data.Idle / value_len
+			avg_data.Runqueue = avg_data.Runqueue / value_len
+			avg_data.Fork = avg_data.Fork / value_len
+			avg_data.Exec = avg_data.Exec / value_len
+			avg_data.Interupt = avg_data.Interupt / value_len
+			avg_data.Systemcall = avg_data.Systemcall / value_len
+			avg_data.Contextswitch = avg_data.Contextswitch / value_len
+		}
+		agent_cpuperf = append(agent_cpuperf, avg_data)
+
+		return true
+	})
+
+	GlobalChannel.DemoAvgCpuData <- agent_cpuperf
+	time.Sleep(time.Millisecond * time.Duration(1))
+
+	// Init
+	d.AvgCpuPerf = &sync.Map{}
+}
+
+func (d *DemoHandler) GenerateDiskPerf(interval ConfigScrape) {
+	for {
+		ts := time.Now().Unix()
+
+		var agent_diskperf []*data.Diskperf = make([]*data.Diskperf, 0)
+		for i := 0; i < d.Hostcount; i++ {
+			for ioid := range DISK_IONAME {
+				demo_data := &data.Diskperf{
+					Ontunetime:   ts,
+					Agenttime:    ts,
+					Agentid:      d.Agentinfo.Agentid[i],
+					Ionameid:     ioid,
+					Readrate:     rand.Intn(100),
+					Writerate:    rand.Intn(100),
+					Iops:         rand.Intn(100),
+					Busy:         rand.Intn(100),
+					Descid:       rand.Intn(50),
+					Readsvctime:  rand.Intn(100),
+					Writesvctime: rand.Intn(100),
+				}
+				agent_diskperf = append(agent_diskperf, demo_data)
+
+				// Store Average Value
+				key := fmt.Sprintf("%d_%d", demo_data.Agentid, demo_data.Ionameid)
+				if val, ok := d.AvgDiskPerf.LoadOrStore(key, make([]*data.Diskperf, 0)); ok {
+					var avgvalue []*data.Diskperf = make([]*data.Diskperf, 0)
+					avgvalue = append(avgvalue, val.([]*data.Diskperf)...)
+					d.AvgDiskPerf.Store(key, avgvalue)
+				}
+			}
+		}
+
+		GlobalChannel.DemoDiskData <- agent_diskperf
+		time.Sleep(time.Second * time.Duration(interval.Rate))
+	}
+}
+
+func (d *DemoHandler) GenerateAvgDiskPerf() {
+	var agent_diskperf []*data.Diskperf = make([]*data.Diskperf, 0)
+
+	d.AvgDiskPerf.Range(func(key, value any) bool {
+		slice := strings.Split(key.(string), "_")
+		agentid, err := strconv.Atoi(slice[0])
+		ErrorCheck(err)
+		ioid, err := strconv.Atoi(slice[1])
+		ErrorCheck(err)
+
+		avg_data := &data.Diskperf{
+			Agentid:  agentid,
+			Ionameid: ioid,
+		}
+		for _, av := range value.([]*data.Diskperf) {
+			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(av.Ontunetime)))
+			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(av.Ontunetime)))
+			avg_data.Descid = av.Descid
+			avg_data.Readrate = avg_data.Readrate + av.Readrate
+			avg_data.Writerate = avg_data.Writerate + av.Writerate
+			avg_data.Iops = avg_data.Iops + av.Iops
+			avg_data.Busy = avg_data.Busy + av.Busy
+			avg_data.Descid = avg_data.Descid + av.Descid
+			avg_data.Readsvctime = avg_data.Readsvctime + av.Readsvctime
+			avg_data.Writesvctime = avg_data.Writesvctime + av.Writesvctime
+		}
+		if value_len := len(value.([]*data.Diskperf)); value_len > 0 {
+			avg_data.Readrate = avg_data.Readrate / value_len
+			avg_data.Writerate = avg_data.Writerate / value_len
+			avg_data.Iops = avg_data.Iops / value_len
+			avg_data.Busy = avg_data.Busy / value_len
+			avg_data.Descid = avg_data.Descid / value_len
+			avg_data.Readsvctime = avg_data.Readsvctime / value_len
+			avg_data.Writesvctime = avg_data.Writesvctime / value_len
+		}
+		agent_diskperf = append(agent_diskperf, avg_data)
+
+		return true
+	})
+
+	GlobalChannel.DemoAvgDiskData <- agent_diskperf
+	time.Sleep(time.Millisecond * time.Duration(1))
+
+	// Init
+	d.AvgDiskPerf = &sync.Map{}
+}
+
+func (d *DemoHandler) GenerateNetPerf(interval ConfigScrape) {
+	for {
+		ts := time.Now().Unix()
+
+		var agent_netperf []*data.Netperf = make([]*data.Netperf, 0)
+		for i := 0; i < d.Hostcount; i++ {
+			for ioid := range NET_IONAME {
+				demo_data := &data.Netperf{
+					Ontunetime: ts,
+					Agenttime:  ts,
+					Agentid:    d.Agentinfo.Agentid[i],
+					Ionameid:   ioid,
+					Readrate:   rand.Intn(100),
+					Writerate:  rand.Intn(100),
+					Readiops:   rand.Intn(100),
+					Writeiops:  rand.Intn(100),
+					Errorps:    rand.Intn(100),
+					Collision:  rand.Intn(100),
+				}
+				agent_netperf = append(agent_netperf, demo_data)
+
+				// Store Average Value
+				key := fmt.Sprintf("%d_%d", demo_data.Agentid, demo_data.Ionameid)
+				if val, ok := d.AvgNetPerf.LoadOrStore(key, make([]*data.Netperf, 0)); ok {
+					var avgvalue []*data.Netperf = make([]*data.Netperf, 0)
+					avgvalue = append(avgvalue, val.([]*data.Netperf)...)
+					d.AvgNetPerf.Store(key, avgvalue)
+				}
+			}
+		}
+
+		GlobalChannel.DemoNetData <- agent_netperf
+		time.Sleep(time.Second * time.Duration(interval.Rate))
+	}
+}
+
+func (d *DemoHandler) GenerateAvgNetPerf() {
+	var agent_netperf []*data.Netperf = make([]*data.Netperf, 0)
+
+	d.AvgNetPerf.Range(func(key, value any) bool {
+		slice := strings.Split(key.(string), "_")
+		agentid, err := strconv.Atoi(slice[0])
+		ErrorCheck(err)
+		ioid, err := strconv.Atoi(slice[1])
+		ErrorCheck(err)
+
+		avg_data := &data.Netperf{
+			Agentid:  agentid,
+			Ionameid: ioid,
+		}
+		for _, av := range value.([]*data.Netperf) {
+			avg_data.Ontunetime = int64(math.Max(float64(avg_data.Ontunetime), float64(av.Ontunetime)))
+			avg_data.Agenttime = int64(math.Max(float64(avg_data.Agenttime), float64(av.Ontunetime)))
+			avg_data.Readrate = avg_data.Readrate + av.Readrate
+			avg_data.Writerate = avg_data.Writerate + av.Writerate
+			avg_data.Readiops = avg_data.Readiops + av.Readiops
+			avg_data.Writeiops = avg_data.Writeiops + av.Writeiops
+			avg_data.Errorps = avg_data.Errorps + av.Errorps
+			avg_data.Collision = avg_data.Collision + av.Collision
+		}
+		if value_len := len(value.([]*data.Netperf)); value_len > 0 {
+			avg_data.Readrate = avg_data.Readrate / value_len
+			avg_data.Writerate = avg_data.Writerate / value_len
+			avg_data.Readiops = avg_data.Readiops / value_len
+			avg_data.Writeiops = avg_data.Writeiops / value_len
+			avg_data.Errorps = avg_data.Errorps / value_len
+			avg_data.Collision = avg_data.Collision / value_len
+		}
+		agent_netperf = append(agent_netperf, avg_data)
+
+		return true
+	})
+
+	GlobalChannel.DemoAvgNetData <- agent_netperf
+	time.Sleep(time.Millisecond * time.Duration(1))
+
+	// Init
+	d.AvgNetPerf = &sync.Map{}
 }

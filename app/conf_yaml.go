@@ -26,7 +26,8 @@ type ConfigHost struct {
 	Active                     int          `yaml:"active"`
 	Perf                       ConfigScrape `yaml:"perf"`
 	Proc                       ConfigScrape `yaml:"proc"`
-	IO                         ConfigScrape `yaml:"io"`
+	Disk                       ConfigScrape `yaml:"disk"`
+	Net                        ConfigScrape `yaml:"net"`
 	CPU                        ConfigScrape `yaml:"cpu"`
 }
 

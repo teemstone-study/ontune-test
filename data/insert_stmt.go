@@ -27,8 +27,14 @@ INSERT INTO hostinfo
 	$21::int[], $22::int[], $23::text[], $24::int[]))
 `
 
-var TruncateLastperf = `
-TRUNCATE lastperf
+var InsertDeviceid = `
+INSERT INTO deviceid
+(select * from unnest($1::int[], $2::text[]))
+`
+
+var InsertDescid = `
+INSERT INTO descid
+(select * from unnest($1::int[], $2::text[]))
 `
 
 var InsertLastperf = `
@@ -39,10 +45,6 @@ INSERT INTO lastperf
 	$27::int[], $28::int[], $29::int[], $30::int[], $31::int[], $32::int[], $33::int[], $34::int[], $35::int[], $36::int[], $37::int[]))
 `
 
-var TruncateLastrealtimeperf = `
-TRUNCATE lastrealtimeperf
-`
-
 var InsertLastrealtimeperf = `
 INSERT INTO lastrealtimeperf
 (select * from unnest($1::int[], $2::int[], $3::text[], $4::int[], $5::int[], $6::int[], $7::int[], $8::int[], 
@@ -51,7 +53,7 @@ INSERT INTO lastrealtimeperf
 	$27::int[], $28::int[]))
 `
 
-var InsertRealtimeperfPg = `
+var InsertPerfPg = `
 INSERT INTO %s
 (select * from unnest($1::int[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[],$10::int[],
 	$11::int[],$12::int[],$13::int[],$14::int[],$15::int[],$16::int[],$17::int[],$18::int[],$19::int[],$20::int[],
@@ -62,7 +64,7 @@ INSERT INTO %s
 	))
 `
 
-var InsertRealtimeperfTs = `
+var InsertPerfTs = `
 INSERT INTO %s
 (select * from unnest($1::timestamptz[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[],$10::int[],
 	$11::int[],$12::int[],$13::int[],$14::int[],$15::int[],$16::int[],$17::int[],$18::int[],$19::int[],$20::int[],
@@ -71,4 +73,38 @@ INSERT INTO %s
 	$41::int[],$42::int[],$43::int[],$44::int[],$45::int[],$46::int[],$47::int[],$48::int[],$49::int[],$50::int[],
 	$51::int[],$52::int[],$53::int[],$54::int[],$55::int[],$56::int[],$57::int[],$58::int[],$59::int[]
 	))
+`
+
+var InsertCpuPg = `
+INSERT INTO %s
+(select * from unnest($1::int[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[],$10::int[],
+	$11::int[],$12::int[],$13::int[],$14::int[]))
+`
+
+var InsertCpuTs = `
+INSERT INTO %s
+(select * from unnest($1::timestamptz[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[],$10::int[],
+	$11::int[],$12::int[],$13::int[],$14::int[]))
+`
+
+var InsertDiskPg = `
+INSERT INTO %s
+(select * from unnest($1::int[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[],$10::int[],
+	$11::int[]))
+`
+
+var InsertDiskTs = `
+INSERT INTO %s
+(select * from unnest($1::timestamptz[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[],$10::int[],
+	$11::int[]))
+`
+
+var InsertNetPg = `
+INSERT INTO %s
+(select * from unnest($1::int[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[],$10::int[]))
+`
+
+var InsertNetTs = `
+INSERT INTO %s
+(select * from unnest($1::timestamptz[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[],$10::int[]))
 `

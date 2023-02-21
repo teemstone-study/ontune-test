@@ -261,6 +261,59 @@ CREATE TABLE IF NOT EXISTS public.%[1]s (
 CREATE INDEX IF NOT EXISTS %[1]s_idx ON public.%[1]s USING btree (_ontunetime, _agentid);
 `
 
-var MetricPerfHypertable = `
+var MetricCpuStmt = `
+CREATE TABLE IF NOT EXISTS public.%[1]s (			
+	_ontunetime	%[2]s NOT NULL,
+	_agenttime	integer NULL,
+	_agentid	integer NULL,
+	_index integer NULL,
+	_user integer NULL,
+	_sys integer NULL,
+	_wait integer NULL,
+	_idle integer NULL,
+	_runqueue integer NULL,
+	_fork integer NULL,
+	_exec integer NULL,
+	_interupt integer NULL,
+	_systemcall integer NULL,
+	_contextswitch integer NULL
+);
+CREATE INDEX IF NOT EXISTS %[1]s_idx ON public.%[1]s USING btree (_ontunetime, _agentid);
+`
+
+var MetricDiskStmt = `
+CREATE TABLE IF NOT EXISTS public.%[1]s (			
+	_ontunetime	%[2]s NOT NULL,
+	_agenttime	integer NULL,
+	_agentid	integer NULL,
+	_ionameid integer NULL,
+	_readrate integer NULL,
+	_writerate integer NULL,
+	_iops integer NULL,
+	_busy integer NULL,
+	_descid integer NULL,
+	_readsvctime integer NULL,
+	_writesvctime integer NULL
+);
+CREATE INDEX IF NOT EXISTS %[1]s_idx ON public.%[1]s USING btree (_ontunetime, _agentid);
+`
+
+var MetricNetStmt = `
+CREATE TABLE IF NOT EXISTS public.%[1]s (			
+	_ontunetime	%[2]s NOT NULL,
+	_agenttime	integer NULL,
+	_agentid	integer NULL,
+	_ionameid integer NULL,
+	_readrate integer NULL,
+	_writerate integer NULL,
+	_readiops integer NULL,
+	_writeiops integer NULL,
+	_errorps integer NULL,
+	_collision integer NULL
+);
+CREATE INDEX IF NOT EXISTS %[1]s_idx ON public.%[1]s USING btree (_ontunetime, _agentid);
+`
+
+var MetricHypertable = `
 select create_hypertable('%s','_ontunetime', chunk_time_interval => interval '1 day');
 `

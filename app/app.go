@@ -15,13 +15,34 @@ const (
 	PROCESS_TIMER   = 1
 	MAX_THREAD      = 8
 	DATE_FORMAT     = "06010215"
+	CPU_CORE        = 4
 )
 
 var (
-	MapHostifo         map[int]string = make(map[int]string)
+	MapHostInfo        map[int]string = make(map[int]string)
 	GlobalOntunetime   int64          = time.Now().Unix()
 	GlobalOntunetimets time.Time      = time.Now()
 	AgentDataProcess   *sync.Map      = &sync.Map{}
+	DISK_IONAME        map[int]string = map[int]string{
+		0: "total",
+		1: "C:",
+		2: "D:",
+	}
+	NET_IONAME map[int]string = map[int]string{
+		0: "total",
+		3: "Intel[R] Ethernet Connection [7] I219-LM",
+		4: "Teredo Tunneling Pseudo-Interface",
+	}
+
+	DEVICE_IDS    []string = []string{"total", "C:", "D:", "Intel[R] Ethernet Connection [7] I219-LM", "Teredo Tunneling Pseudo-Interface"}
+	VOLUME_GROUPS []string = []string{
+		"NULL", "", "rootvg", "None", "N/A", "vg_linux63x8664", "caavg_private", "ProLinux-vg", "centos", "vg_centos62x8664",
+		"VolGroup00", "vg_centos67", "vg_oraclelinux69", "ubuntu64", "VG_XenStorage-628ef03e-1cf7-cd4", "XSLocalEXT-a4fc36e8-ca45-6f11-c", "vg_centos6", "vg00",
+		"prolinux", "gpfs1", "gpfs2", "freedisk", "centos_centos7kvm", "centos_numatest", "debian8-vg", "vg_data",
+		"ontubun1604-vg", "2a-ce75126bbade", "rhel", "centos_k8snode1", "centos_master", "zabbix-vg", "cl_centos8", "old_rootvg",
+		"DSS0", "dg1", "dg2", "XSLocalEXT-86d07858-845c-9433-3", "prchfpdg1", "prchfpdg2", "cl_justin", "d1home",
+		"d2home", "testvg02", "testvg03", "testvg04", "testvg05", "testvg06", "testvg07", "testvg01",
+	}
 )
 
 type Bitmask uint32
@@ -33,6 +54,12 @@ func (value Bitmask) IsSet(key Bitmask) bool {
 type ChannelStruct struct {
 	DemoBasicData      chan []*data.Basicperf
 	DemoAvgBasicData   chan []*data.Basicperf
+	DemoCpuData        chan []*data.Cpuperf
+	DemoAvgCpuData     chan []*data.Cpuperf
+	DemoDiskData       chan []*data.Diskperf
+	DemoAvgDiskData    chan []*data.Diskperf
+	DemoNetData        chan []*data.Netperf
+	DemoAvgNetData     chan []*data.Netperf
 	AverageRequest     chan string
 	AgentData          chan *sync.Map
 	LastPerfData       chan *sync.Map
@@ -46,6 +73,12 @@ var (
 	GlobalChannel ChannelStruct = ChannelStruct{
 		DemoBasicData:      make(chan []*data.Basicperf),
 		DemoAvgBasicData:   make(chan []*data.Basicperf),
+		DemoCpuData:        make(chan []*data.Cpuperf),
+		DemoAvgCpuData:     make(chan []*data.Cpuperf),
+		DemoDiskData:       make(chan []*data.Diskperf),
+		DemoAvgDiskData:    make(chan []*data.Diskperf),
+		DemoNetData:        make(chan []*data.Netperf),
+		DemoAvgNetData:     make(chan []*data.Netperf),
 		AverageRequest:     make(chan string),
 		AgentData:          make(chan *sync.Map),
 		LastPerfData:       make(chan *sync.Map),
@@ -115,7 +148,7 @@ func contains(key any) bool {
 	}
 }
 
-func getMapSize(src *sync.Map) int {
+func GetMapSize(src *sync.Map) int {
 	var size int
 	src.Range(func(key, value any) bool {
 		size += 1

@@ -151,66 +151,48 @@ type Procperf struct {
 	Networkiops   int
 }
 
-type Ioperf struct {
-	Ontunetime    int64
-	Agentid       int
-	Hostname      string
-	User          int
-	Sys           int
-	Wait          int
-	Idle          int
-	Memoryused    int
-	Filecache     int
-	Memorysize    int
-	Avm           int
-	Swapused      int
-	Swapsize      int
-	Diskiorate    int
-	Networkiorate int
-	Topproc       string
-	Topuser       string
-	Topproccount  int
-	Topcpu        int
-	Topdisk       string
-	Topvg         string
-	Topbusy       int
-	Maxcpu        int
-	Maxmem        int
-	Maxswap       int
-	Maxdisk       int
-	Diskiops      int
-	Networkiops   int
+type Diskperf struct {
+	Ontunetime   int64
+	Agenttime    int64
+	Agentid      int
+	Ionameid     int
+	Readrate     int
+	Writerate    int
+	Iops         int
+	Busy         int
+	Descid       int
+	Readsvctime  int
+	Writesvctime int
+}
+
+type Netperf struct {
+	Ontunetime int64
+	Agenttime  int64
+	Agentid    int
+	Ionameid   int
+	Readrate   int
+	Writerate  int
+	Readiops   int
+	Writeiops  int
+	Errorps    int
+	Collision  int
 }
 
 type Cpuperf struct {
 	Ontunetime    int64
+	Agenttime     int64
 	Agentid       int
-	Hostname      string
+	Index         int
 	User          int
 	Sys           int
 	Wait          int
 	Idle          int
-	Memoryused    int
-	Filecache     int
-	Memorysize    int
-	Avm           int
-	Swapused      int
-	Swapsize      int
-	Diskiorate    int
-	Networkiorate int
-	Topproc       string
-	Topuser       string
-	Topproccount  int
-	Topcpu        int
-	Topdisk       string
-	Topvg         string
-	Topbusy       int
-	Maxcpu        int
-	Maxmem        int
-	Maxswap       int
-	Maxdisk       int
-	Diskiops      int
-	Networkiops   int
+	Runqueue      int
+	Fork          int
+	Exec          int
+	Interupt      int
+	Systemcall    int
+	Contextswitch int
 }
 
 type Lastrealtimeperf struct {
