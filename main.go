@@ -91,6 +91,15 @@ func main() {
 		case agent_data := <-app.GlobalChannel.AgentData:
 			// Deep Copy
 			receive_data := app.CopyAgentMap(agent_data)
+
+			var rdata_size int
+			receive_data.Range(func(key, value any) bool {
+				val_map := value.(*sync.Map)
+				rdata_size += app.GetMapSize(val_map)
+				return true
+			})
+			app.LogWrite("log", fmt.Sprintf("agent receive count %d %v", rdata_size, time.Now()))
+
 			app.GlobalChannel.AgentCopyDone <- true
 
 			for _, dh := range db_handler {
