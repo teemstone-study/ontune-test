@@ -29,6 +29,7 @@ type ConfigHost struct {
 	Disk                       ConfigScrape `yaml:"disk"`
 	Net                        ConfigScrape `yaml:"net"`
 	CPU                        ConfigScrape `yaml:"cpu"`
+	DF                         ConfigScrape `yaml:"df"`
 }
 
 type ConfigDemo struct {

@@ -27,16 +27,6 @@ INSERT INTO hostinfo
 	$21::int[], $22::int[], $23::text[], $24::int[]))
 `
 
-var InsertDeviceid = `
-INSERT INTO deviceid
-(select * from unnest($1::int[], $2::text[]))
-`
-
-var InsertDescid = `
-INSERT INTO descid
-(select * from unnest($1::int[], $2::text[]))
-`
-
 var InsertRef = `
 INSERT INTO %s
 (select * from unnest($1::int[], $2::text[]))
@@ -138,4 +128,14 @@ var InsertProcTs = `
 INSERT INTO %s
 (select * from unnest($1::timestamptz[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[],$10::int[],
 	$11::int[],$12::int[],$13::int[],$14::int[],$15::int[],$16::int[]))
+`
+
+var InsertDfPg = `
+INSERT INTO %s
+(select * from unnest($1::int[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[]))
+`
+
+var InsertDfTs = `
+INSERT INTO %s
+(select * from unnest($1::timestamptz[],$2::int[],$3::int[],$4::int[],$5::int[],$6::int[],$7::int[],$8::int[],$9::int[]))
 `

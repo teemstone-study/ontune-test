@@ -20,15 +20,20 @@ type DBHandler struct {
 
 var (
 	info_tables          = []string{"tableinfo", "ontuneinfo", "agentinfo", "hostinfo"}
-	metric_single_tables = []string{"lastrealtimeperf", "lastperf", "deviceid", "descid"}
-	metric_ref_tables    = []string{"proccmd", "procuserid", "procargid", "avgperf", "avgcpu", "avgdisk", "avgnet", "avgpid", "avgproc", "avgmaxperf", "avgmaxcpu", "avgmaxdisk", "avgmaxnet", "avgmaxpid", "avgmaxproc", "avgdf"}
+	metric_single_tables = []string{"lastrealtimeperf", "lastperf", "deviceid", "descid", "dfnameid", "lvnameid"}
+	metric_ref_tables    = []string{"proccmd", "procuserid", "procargid"}
+	metric_avg_tables    = []string{"avgperf", "avgcpu", "avgdisk", "avgnet", "avgpid", "avgproc", "avgmaxperf", "avgmaxcpu", "avgmaxdisk", "avgmaxnet", "avgmaxpid", "avgmaxproc", "avgdf"}
 	metric_tables        = []string{"realtimeperf", "realtimecpu", "realtimedisk", "realtimenet", "realtimepid", "realtimeproc"}
 )
 
 func (d *DBHandler) CheckTable() {
 	d.CheckTableInfo()
-	d.CheckTableRef()
-	d.CheckTableMetric()
+
+	if d.dbtype == "pg" {
+		d.CheckTableRef()
+		d.CheckTableMetric()
+		d.CheckTableAvgMetric()
+	}
 }
 
 func (d *DBHandler) CheckTableInfo() {
@@ -61,10 +66,8 @@ func (d *DBHandler) CheckTableInfo() {
 				tx.MustExec(data.LastrealtimeperfStmt)
 			case "lastperf":
 				tx.MustExec(data.LastperfStmt)
-			case "deviceid":
-				tx.MustExec(data.DeviceidStmt)
-			case "descid":
-				tx.MustExec(data.DescidStmt)
+			default:
+				tx.MustExec(fmt.Sprintf(data.RefStmt, tb))
 			}
 			tx.MustExec(data.InsertTableinfoStmt, tb, time.Now().Unix())
 			LogWrite("log", fmt.Sprintf("%s %s table creation is completed\n", d.name, tb))
@@ -74,7 +77,23 @@ func (d *DBHandler) CheckTableInfo() {
 	}
 
 	if d.dbtype == "ts" {
-		for _, tb := range metric_tables {
+		for _, tbname := range metric_ref_tables {
+			if !d.existTableinfo(tbname) {
+				_, err := d.db.Exec(fmt.Sprintf(data.RefStmt, tbname))
+				ErrorPq(err)
+
+				tx := d.db.MustBegin()
+				tx.MustExec(data.InsertTableinfoStmt, tbname, time.Now().Unix())
+				LogWrite("log", fmt.Sprintf("%s %s table creation is completed\n", d.name, tbname))
+				err = tx.Commit()
+				ErrorTx(err, tx)
+			}
+		}
+
+		mtables := metric_tables
+		mtables = append(mtables, metric_avg_tables...)
+
+		for _, tb := range mtables {
 			var exist_count int
 			err := d.db.QueryRow("SELECT COUNT(*) FROM pg_tables where tablename=$1", tb).Scan(&exist_count)
 			ErrorFatal(err)
@@ -94,6 +113,8 @@ func (d *DBHandler) CheckTableInfo() {
 					tx.MustExec(fmt.Sprintf(data.MetricPidStmt, tb, ontunetime_type))
 				} else if tb[len(tb)-4:] == "proc" {
 					tx.MustExec(fmt.Sprintf(data.MetricProcStmt, tb, ontunetime_type))
+				} else if tb[len(tb)-2:] == "df" {
+					tx.MustExec(fmt.Sprintf(data.MetricDfStmt, tb, ontunetime_type))
 				}
 
 				tx.MustExec(fmt.Sprintf(data.MetricHypertable, tb))
@@ -110,23 +131,26 @@ func (d *DBHandler) CheckTableRef() {
 	d.createRefTables(false)
 }
 
+func (d *DBHandler) CheckTableAvgMetric() {
+	d.createMetricTables(false, "day")
+}
+
 func (d *DBHandler) CheckTableMetric() {
-	d.createMetricTables(false)
+	d.createMetricTables(false, "hour")
 }
 
 func (d *DBHandler) CheckDailyTableRef() {
 	var rTableCreate bool
-	if d.dbtype == "pg" {
-		for {
-			hour := time.Now().Hour()
-			if hour >= 23 && !rTableCreate {
-				rTableCreate = true
-				d.createRefTables(true)
-			} else if hour < 23 {
-				rTableCreate = false
-			}
-			time.Sleep(time.Second * time.Duration(10))
+	for {
+		hour := time.Now().Hour()
+		if hour >= 23 && !rTableCreate {
+			rTableCreate = true
+			d.createRefTables(true)
+			d.createMetricTables(true, "day")
+		} else if hour < 23 {
+			rTableCreate = false
 		}
+		time.Sleep(time.Second * time.Duration(10))
 	}
 }
 
@@ -137,29 +161,39 @@ func (d *DBHandler) createRefTables(check_flag bool) {
 		if !d.existTableinfo(tablename) {
 			_, err := d.db.Exec(fmt.Sprintf(data.RefStmt, tablename))
 			ErrorPq(err)
+
+			tx := d.db.MustBegin()
+			tx.MustExec(data.InsertTableinfoStmt, tablename, time.Now().Unix())
+			LogWrite("log", fmt.Sprintf("%s %s table creation is completed\n", d.name, tablename))
+			err = tx.Commit()
+			ErrorTx(err, tx)
 		}
 	}
 }
 
 func (d *DBHandler) CheckHourTableMetric() {
 	var mTableCreate bool
-	if d.dbtype == "pg" {
-		for {
-			min := time.Now().Minute()
-			if min >= 50 && !mTableCreate {
-				mTableCreate = true
-				d.createMetricTables(true)
-			} else if min < 50 {
-				mTableCreate = false
-			}
-			time.Sleep(time.Second * time.Duration(10))
+	for {
+		min := time.Now().Minute()
+		if min >= 50 && !mTableCreate {
+			mTableCreate = true
+			d.createMetricTables(true, "hour")
+		} else if min < 50 {
+			mTableCreate = false
 		}
+		time.Sleep(time.Second * time.Duration(10))
 	}
 }
 
-func (d *DBHandler) createMetricTables(check_flag bool) {
-	for _, tbname := range metric_tables {
-		tablename := d.getTableName("hour", tbname, check_flag)
+func (d *DBHandler) createMetricTables(check_flag bool, metric_type string) {
+	var tables []string
+	if metric_type == "day" {
+		tables = metric_avg_tables
+	} else {
+		tables = metric_tables
+	}
+	for _, tbname := range tables {
+		tablename := d.getTableName(metric_type, tbname, check_flag)
 		LogWrite("log", fmt.Sprintf("%s\n", tablename))
 		if !d.existTableinfo(tablename) {
 			var ontunetime_type string = "integer"
@@ -182,7 +216,17 @@ func (d *DBHandler) createMetricTables(check_flag bool) {
 			} else if tbname[len(tbname)-4:] == "proc" {
 				_, err := d.db.Exec(fmt.Sprintf(data.MetricProcStmt, tablename, ontunetime_type))
 				ErrorPq(err)
+			} else if tbname[len(tbname)-2:] == "df" {
+				_, err := d.db.Exec(fmt.Sprintf(data.MetricDfStmt, tablename, ontunetime_type))
+				ErrorPq(err)
 			}
+
+			tx := d.db.MustBegin()
+			tx.MustExec(data.InsertTableinfoStmt, tablename, time.Now().Unix())
+			LogWrite("log", fmt.Sprintf("%s %s table creation is completed\n", d.name, tablename))
+			err := tx.Commit()
+			ErrorTx(err, tx)
+
 		}
 	}
 }
@@ -201,7 +245,7 @@ func (d *DBHandler) getTableName(tabletype string, tablename string, check_flag 
 		if check_flag {
 			createHour = now.Add(time.Hour * time.Duration(1)).Format(format)
 		} else {
-			createHour = now.Format(HOURLY_DATE_FORMAT)
+			createHour = now.Format(format)
 		}
 		metrictablename := tablename + "_" + createHour
 		return metrictablename
@@ -444,6 +488,25 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 			}
 			err := tx.Commit()
 			LogWrite("debug", fmt.Sprintf("aproc %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
+			ErrorTx(err, tx)
+		} else if len(k) >= 5 && k[:5] == "avgdf" {
+			var avgdf_arr data.DfArr = data.DfArr{}
+			insert_agent_data.Range(func(k, v any) bool {
+				agent_struct_data := v.(*data.Df)
+				avgdf_arr.SetData(*agent_struct_data)
+
+				return true
+			})
+
+			tx := d.db.MustBegin()
+
+			if d.dbtype == "pg" {
+				tx.MustExec(fmt.Sprintf(data.InsertDfPg, d.getTableName("day", "avgdf", false)), avgdf_arr.GetArgs(d.dbtype)...)
+			} else if d.dbtype == "ts" {
+				tx.MustExec(fmt.Sprintf(data.InsertDfTs, d.getTableName("day", "avgdf", false)), avgdf_arr.GetArgs(d.dbtype)...)
+			}
+			err := tx.Commit()
+			LogWrite("debug", fmt.Sprintf("adf %d %s %s %d", idx, k, d.dbtype, GlobalOntunetime))
 			ErrorTx(err, tx)
 		} else if len(k) >= 7 && k[:7] == "avgdisk" {
 			var avgdisk_arr data.DiskArr = data.DiskArr{}
@@ -699,8 +762,8 @@ func (d *DBHandler) InitDeviceid() {
 		}
 
 		tx := d.db.MustBegin()
-		tx.MustExec(data.TruncateDeviceid)
-		tx.MustExec(data.InsertDeviceid, pq.Array(keys), pq.StringArray(data.DEVICE_IDS))
+		tx.MustExec(fmt.Sprintf(data.TruncateRef, "deviceid"))
+		tx.MustExec(fmt.Sprintf(data.InsertRef, "deviceid"), pq.Array(keys), pq.StringArray(data.DEVICE_IDS))
 		err = tx.Commit()
 		ErrorTx(err, tx)
 	}
@@ -718,8 +781,46 @@ func (d *DBHandler) InitDescid() {
 		}
 
 		tx := d.db.MustBegin()
-		tx.MustExec(data.TruncateDescid)
-		tx.MustExec(data.InsertDescid, pq.Array(keys), pq.StringArray(data.VOLUME_GROUPS))
+		tx.MustExec(fmt.Sprintf(data.TruncateRef, "descid"))
+		tx.MustExec(fmt.Sprintf(data.InsertRef, "descid"), pq.Array(keys), pq.StringArray(data.VOLUME_GROUPS))
+		err = tx.Commit()
+		ErrorTx(err, tx)
+	}
+}
+
+func (d *DBHandler) InitDfnameid() {
+	var exist_count int
+	err := d.db.QueryRow("SELECT COUNT(*) FROM dfnameid").Scan(&exist_count)
+	ErrorFatal(err)
+
+	if exist_count < len(data.DFNAME_DATA) {
+		keys := make([]int, 0)
+		for k := range data.DFNAME_DATA {
+			keys = append(keys, k)
+		}
+
+		tx := d.db.MustBegin()
+		tx.MustExec(fmt.Sprintf(data.TruncateRef, "dfnameid"))
+		tx.MustExec(fmt.Sprintf(data.InsertRef, "dfnameid"), pq.Array(keys), pq.StringArray(data.VOLUME_GROUPS))
+		err = tx.Commit()
+		ErrorTx(err, tx)
+	}
+}
+
+func (d *DBHandler) InitLvnameid() {
+	var exist_count int
+	err := d.db.QueryRow("SELECT COUNT(*) FROM lvnameid").Scan(&exist_count)
+	ErrorFatal(err)
+
+	if exist_count < len(data.LVNAME_DATA) {
+		keys := make([]int, 0)
+		for k := range data.LVNAME_DATA {
+			keys = append(keys, k)
+		}
+
+		tx := d.db.MustBegin()
+		tx.MustExec(fmt.Sprintf(data.TruncateRef, "lvnameid"))
+		tx.MustExec(fmt.Sprintf(data.InsertRef, "lvnameid"), pq.Array(keys), pq.StringArray(data.VOLUME_GROUPS))
 		err = tx.Commit()
 		ErrorTx(err, tx)
 	}
@@ -781,10 +882,14 @@ func DBInit(dbinfo ConfigDbInfo, DemoHandler DemoHandler) *DBHandler {
 	d.InitExecAgentHostInfo()
 	d.InitDeviceid()
 	d.InitDescid()
+	d.InitDfnameid()
+	d.InitLvnameid()
 	d.InitRef()
 
-	go d.CheckHourTableMetric()
-	go d.CheckDailyTableRef()
+	if d.dbtype == "pg" {
+		go d.CheckHourTableMetric()
+		go d.CheckDailyTableRef()
+	}
 	go d.UpdateOntuneinfo()
 
 	return d

@@ -664,6 +664,44 @@ func (a *CpuArr) GetArgs(dbtype string) []interface{} {
 	return data
 }
 
+type DfArr struct {
+	Ontunetime []int64
+	Agenttime  []int64
+	Agentid    []int
+	Dfnameid   []int
+	Totalsize  []int
+	Usage      []int
+	Freesize   []int
+	Iusage     []int
+	Lvnameid   []int
+}
+
+func (a *DfArr) SetData(d Df) {
+	a.Ontunetime = append(a.Ontunetime, d.Ontunetime)
+	a.Agenttime = append(a.Agenttime, d.Agenttime)
+	a.Agentid = append(a.Agentid, d.Agentid)
+	a.Dfnameid = append(a.Dfnameid, d.Dfnameid)
+	a.Totalsize = append(a.Totalsize, d.Totalsize)
+	a.Usage = append(a.Usage, d.Usage)
+	a.Freesize = append(a.Freesize, d.Freesize)
+	a.Iusage = append(a.Iusage, d.Iusage)
+	a.Lvnameid = append(a.Lvnameid, d.Lvnameid)
+}
+
+func (a *DfArr) GetArgs(dbtype string) []interface{} {
+	data := InsertOntunetime(dbtype, a.Ontunetime)
+	data = append(data, pq.Array(a.Agenttime))
+	data = append(data, pq.Array(a.Agentid))
+	data = append(data, pq.Array(a.Dfnameid))
+	data = append(data, pq.Array(a.Totalsize))
+	data = append(data, pq.Array(a.Usage))
+	data = append(data, pq.Array(a.Freesize))
+	data = append(data, pq.Array(a.Iusage))
+	data = append(data, pq.Array(a.Lvnameid))
+
+	return data
+}
+
 type LastrealtimeperfArr struct {
 	Ontunetime    []int64
 	Agentid       []int

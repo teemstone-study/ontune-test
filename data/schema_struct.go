@@ -208,6 +208,18 @@ type Cpu struct {
 	Contextswitch int
 }
 
+type Df struct {
+	Ontunetime int64
+	Agenttime  int64
+	Agentid    int
+	Dfnameid   int
+	Totalsize  int
+	Usage      int
+	Freesize   int
+	Iusage     int
+	Lvnameid   int
+}
+
 type Lastrealtimeperf struct {
 	Ontunetime    int64
 	Agentid       int

@@ -182,20 +182,6 @@ CREATE UNLOGGED TABLE IF NOT EXISTS public.lastperf (
 CREATE INDEX IF NOT EXISTS lastperf_idx ON public.lastperf USING btree (_hostname);
 `
 
-var DeviceidStmt = `
-CREATE TABLE IF NOT EXISTS public.deviceid (	
-	_id serial NOT NULL PRIMARY KEY,
-	_name text NULL
-);	
-`
-
-var DescidStmt = `
-CREATE TABLE IF NOT EXISTS public.descid (	
-	_id serial NOT NULL PRIMARY KEY,
-	_name text NULL
-);	
-`
-
 var MetricPerfStmt = `
 CREATE TABLE IF NOT EXISTS public.%[1]s (			
 	_ontunetime	%[2]s NOT NULL,
@@ -360,6 +346,21 @@ CREATE TABLE IF NOT EXISTS public.%[1]s (
 	_threadcnt  integer NULL,
 	_pvbytes    integer NULL,
 	_pgpool     integer NULL
+);
+CREATE INDEX IF NOT EXISTS %[1]s_idx ON public.%[1]s USING btree (_ontunetime, _agentid);
+`
+
+var MetricDfStmt = `
+CREATE TABLE IF NOT EXISTS public.%[1]s (			
+	_ontunetime	%[2]s NOT NULL,
+	_agenttime	integer NULL,
+	_agentid	integer NULL,
+	_dfnameid   integer NULL,
+	_totalsize  integer NULL,
+	_usage      integer NULL,
+	_freesize   integer NULL,
+	_iusage     integer NULL,
+	_lvnameid   integer NULL
 );
 CREATE INDEX IF NOT EXISTS %[1]s_idx ON public.%[1]s USING btree (_ontunetime, _agentid);
 `

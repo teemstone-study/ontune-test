@@ -20,6 +20,7 @@ const (
 	HOURLY_DATE_FORMAT = "06010215"
 	DAILY_DATE_FORMAT  = "06010200"
 	CPU_CORE           = 4
+	DF_COUNT           = 4
 )
 
 var (
@@ -54,6 +55,7 @@ type ChannelStruct struct {
 	DemoProcData       chan []*data.Pid
 	DemoAvgProcData    chan []*data.Pid
 	DemoAvgMaxProcData chan []*data.Pid
+	DemoAvgDfData      chan []*data.Df
 	AverageRequest     chan string
 	AgentData          chan *sync.Map
 	LastPerfData       chan *sync.Map
@@ -80,6 +82,7 @@ var (
 		DemoProcData:       make(chan []*data.Pid),
 		DemoAvgProcData:    make(chan []*data.Pid),
 		DemoAvgMaxProcData: make(chan []*data.Pid),
+		DemoAvgDfData:      make(chan []*data.Df),
 		AverageRequest:     make(chan string),
 		AgentData:          make(chan *sync.Map),
 		LastPerfData:       make(chan *sync.Map),

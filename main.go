@@ -39,6 +39,7 @@ func main() {
 	go demo_handler.GenerateDisk(hostintervals.Disk)
 	go demo_handler.GenerateNet(hostintervals.Net)
 	go demo_handler.GenerateProc(hostintervals.Proc)
+	go demo_handler.GenerateDf(hostintervals.DF)
 
 	for {
 		select {
@@ -72,6 +73,8 @@ func main() {
 			process_handler.ReceiveAvgProc(avg_proc_data, "avgpid")
 		case avgmax_proc_data := <-app.GlobalChannel.DemoAvgMaxProcData:
 			process_handler.ReceiveAvgProc(avgmax_proc_data, "avgmaxpid")
+		case avg_df_data := <-app.GlobalChannel.DemoAvgDfData:
+			process_handler.ReceiveAvgDf(avg_df_data)
 		case request_avg_flag := <-app.GlobalChannel.AverageRequest:
 			switch request_avg_flag {
 			case "perf":

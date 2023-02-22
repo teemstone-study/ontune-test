@@ -178,6 +178,8 @@ func (d *DemoHandler) GeneratePerf(interval ConfigScrape) {
 			if val, ok := d.AvgPerf.LoadOrStore(demo_data.Agentid, make([]*data.Perf, 0)); ok {
 				var avgvalue []*data.Perf = make([]*data.Perf, 0)
 				avgvalue = append(avgvalue, val.([]*data.Perf)...)
+				avgvalue = append(avgvalue, demo_data)
+
 				d.AvgPerf.Store(demo_data.Agentid, avgvalue)
 			}
 		}
@@ -416,6 +418,7 @@ func (d *DemoHandler) GenerateCpu(interval ConfigScrape) {
 				if val, ok := d.AvgCpu.LoadOrStore(key, make([]*data.Cpu, 0)); ok {
 					var avgvalue []*data.Cpu = make([]*data.Cpu, 0)
 					avgvalue = append(avgvalue, val.([]*data.Cpu)...)
+					avgvalue = append(avgvalue, demo_data)
 					d.AvgCpu.Store(key, avgvalue)
 				}
 			}
@@ -521,6 +524,7 @@ func (d *DemoHandler) GenerateDisk(interval ConfigScrape) {
 				if val, ok := d.AvgDisk.LoadOrStore(key, make([]*data.Disk, 0)); ok {
 					var avgvalue []*data.Disk = make([]*data.Disk, 0)
 					avgvalue = append(avgvalue, val.([]*data.Disk)...)
+					avgvalue = append(avgvalue, demo_data)
 					d.AvgDisk.Store(key, avgvalue)
 				}
 			}
@@ -618,6 +622,7 @@ func (d *DemoHandler) GenerateNet(interval ConfigScrape) {
 				if val, ok := d.AvgNet.LoadOrStore(key, make([]*data.Net, 0)); ok {
 					var avgvalue []*data.Net = make([]*data.Net, 0)
 					avgvalue = append(avgvalue, val.([]*data.Net)...)
+					avgvalue = append(avgvalue, demo_data)
 					d.AvgNet.Store(key, avgvalue)
 				}
 			}
@@ -726,6 +731,7 @@ func (d *DemoHandler) GenerateProc(interval ConfigScrape) {
 						if val, ok := d.AvgProc.LoadOrStore(key, make([]*data.Pid, 0)); ok {
 							var avgvalue []*data.Pid = make([]*data.Pid, 0)
 							avgvalue = append(avgvalue, val.([]*data.Pid)...)
+							avgvalue = append(avgvalue, demo_data)
 							d.AvgProc.Store(key, avgvalue)
 						}
 					}
@@ -834,4 +840,31 @@ func (d *DemoHandler) GenerateAvgProc() {
 
 	// Init
 	d.AvgProc = &sync.Map{}
+}
+
+func (d *DemoHandler) GenerateDf(interval ConfigScrape) {
+	for {
+		ts := time.Now().Unix()
+
+		var agent_df []*data.Df = make([]*data.Df, 0)
+		for i := 0; i < d.Hostcount; i++ {
+			for j := 0; j < DF_COUNT; j++ {
+				demo_data := &data.Df{
+					Ontunetime: ts,
+					Agenttime:  ts,
+					Agentid:    d.Agentinfo.Agentid[i],
+					Dfnameid:   rand.Intn(1000),
+					Totalsize:  rand.Intn(100),
+					Usage:      rand.Intn(100),
+					Freesize:   rand.Intn(100),
+					Iusage:     rand.Intn(100),
+					Lvnameid:   rand.Intn(500),
+				}
+				agent_df = append(agent_df, demo_data)
+			}
+		}
+
+		GlobalChannel.DemoAvgDfData <- agent_df
+		time.Sleep(time.Second * time.Duration(interval.Avg))
+	}
 }

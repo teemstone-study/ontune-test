@@ -30,6 +30,9 @@ host:
   net:
     rate: 5
     avg: 600
+  df:
+    rate: 5
+    avg: 300
 
 demo:
   host_count: 10000

@@ -228,6 +228,16 @@ func (a *ProcessHandler) SetLastrealtimeperf(item_type string, agent_data interf
 	}
 }
 
+func (a *ProcessHandler) ReceiveAvgDf(df_data []*data.Df) {
+	for _, p := range df_data {
+		tablename := a.AgentTableNames[p.Agentid%10]["avgdf"]
+		if val, ok := a.AgentData.LoadOrStore(tablename, &sync.Map{}); ok {
+			key := fmt.Sprintf("%d_%d", p.Agentid, p.Dfnameid)
+			val.(*sync.Map).Store(key, p)
+		}
+	}
+}
+
 func (a *ProcessHandler) SetLastperf(agent_data interface{}, agent_id int, ontunetime int64) {
 	tablename := "lastperf"
 
@@ -356,6 +366,10 @@ func (a *ProcessHandler) ProcessData() {
 
 				avgmaxtablename = a.AgentTableNames[i]["avgmaxproc"]
 				a.AgentData.Store(avgmaxtablename, &sync.Map{})
+
+				avgtablename = a.AgentTableNames[i]["avgdf"]
+				a.AgentData.Store(avgtablename, &sync.Map{})
+
 			}
 			<-GlobalChannel.AgentInsertDone
 		}
