@@ -98,6 +98,7 @@ func main() {
 				rdata_size += app.GetMapSize(val_map)
 				return true
 			})
+			t1 := time.Now().Unix()
 			app.LogWrite("log", fmt.Sprintf("agent receive count %d %v", rdata_size, time.Now()))
 
 			app.GlobalChannel.AgentCopyDone <- true
@@ -119,7 +120,8 @@ func main() {
 			}
 
 			app.GlobalChannel.AgentInsertDone <- true
-			app.LogWrite("log", fmt.Sprintf("agent insert completed %v", time.Now()))
+			t2 := time.Now().Unix()
+			app.LogWrite("log", fmt.Sprintf("agent insert completed %d %v %d", rdata_size, time.Now(), t2-t1))
 		case lastperf_data := <-app.GlobalChannel.LastPerfData:
 			receive_data := app.CopyMap(lastperf_data)
 			app.GlobalChannel.LastperfCopyDone <- true
@@ -133,7 +135,7 @@ func main() {
 				wg.Wait()
 			}
 			app.GlobalChannel.LastperfInsertDone <- true
-			app.LogWrite("log", fmt.Sprintf("lastperf insert completed %v", time.Now()))
+			//app.LogWrite("log", fmt.Sprintf("lastperf insert completed %v", time.Now()))
 
 		}
 		time.Sleep(time.Millisecond * time.Duration(1))
