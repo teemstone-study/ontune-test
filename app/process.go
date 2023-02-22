@@ -314,61 +314,61 @@ func (a *ProcessHandler) ProcessData() {
 			<-GlobalChannel.AgentCopyDone
 			for i := 0; i < 10; i++ {
 				realtimetablename := a.AgentTableNames[i]["realtimeperf"]
-				a.AgentData.Store(realtimetablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(realtimetablename)
 
 				avgtablename := a.AgentTableNames[i]["avgperf"]
-				a.AgentData.Store(avgtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgtablename)
 
 				avgmaxtablename := a.AgentTableNames[i]["avgmaxperf"]
-				a.AgentData.Store(avgmaxtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgmaxtablename)
 
 				realtimetablename = a.AgentTableNames[i]["realtimecpu"]
-				a.AgentData.Store(realtimetablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(realtimetablename)
 
 				avgtablename = a.AgentTableNames[i]["avgcpu"]
-				a.AgentData.Store(avgtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgtablename)
 
 				avgmaxtablename = a.AgentTableNames[i]["avgmaxcpu"]
-				a.AgentData.Store(avgmaxtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgmaxtablename)
 
 				realtimetablename = a.AgentTableNames[i]["realtimedisk"]
-				a.AgentData.Store(realtimetablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(realtimetablename)
 
 				avgtablename = a.AgentTableNames[i]["avgdisk"]
-				a.AgentData.Store(avgtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgtablename)
 
 				avgmaxtablename = a.AgentTableNames[i]["avgmaxdisk"]
-				a.AgentData.Store(avgmaxtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgmaxtablename)
 
 				realtimetablename = a.AgentTableNames[i]["realtimenet"]
-				a.AgentData.Store(realtimetablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(realtimetablename)
 
 				avgtablename = a.AgentTableNames[i]["avgnet"]
-				a.AgentData.Store(avgtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgtablename)
 
 				avgmaxtablename = a.AgentTableNames[i]["avgmaxnet"]
-				a.AgentData.Store(avgmaxtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgmaxtablename)
 
 				realtimetablename = a.AgentTableNames[i]["realtimepid"]
-				a.AgentData.Store(realtimetablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(realtimetablename)
 
 				avgtablename = a.AgentTableNames[i]["avgpid"]
-				a.AgentData.Store(avgtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgtablename)
 
 				avgmaxtablename = a.AgentTableNames[i]["avgmaxpid"]
-				a.AgentData.Store(avgmaxtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgmaxtablename)
 
 				realtimetablename = a.AgentTableNames[i]["realtimeproc"]
-				a.AgentData.Store(realtimetablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(realtimetablename)
 
 				avgtablename = a.AgentTableNames[i]["avgproc"]
-				a.AgentData.Store(avgtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgtablename)
 
 				avgmaxtablename = a.AgentTableNames[i]["avgmaxproc"]
-				a.AgentData.Store(avgmaxtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgmaxtablename)
 
 				avgtablename = a.AgentTableNames[i]["avgdf"]
-				a.AgentData.Store(avgtablename, &sync.Map{})
+				a.AgentData.LoadAndDelete(avgtablename)
 
 			}
 			<-GlobalChannel.AgentInsertDone

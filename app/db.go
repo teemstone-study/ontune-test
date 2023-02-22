@@ -297,7 +297,7 @@ func (d *DBHandler) InsertAgentData(agent_data *sync.Map, wg *sync.WaitGroup, id
 
 		// Copy and Init
 		insert_agent_data := CopyMap(val)
-		agent_data.Store(key, &sync.Map{})
+		agent_data.LoadAndDelete(key)
 
 		k := key.(string)
 		if len(k) >= 12 && k[:12] == "realtimeperf" {
