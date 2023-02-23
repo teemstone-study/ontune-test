@@ -298,7 +298,7 @@ func (a *ProcessHandler) ProcessData() {
 			// Lastperf Init
 			<-GlobalChannel.LastperfCopyDone
 			a.LPCount = 0
-			a.AgentData.Store("lastperf", &sync.Map{})
+			a.AgentData.LoadAndDelete("lastperf")
 
 			// DBInsert Process Done
 			<-GlobalChannel.LastperfInsertDone

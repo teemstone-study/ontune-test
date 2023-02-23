@@ -385,7 +385,10 @@ func (d *DemoHandler) GenerateAvgPerf() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgPerf = &sync.Map{}
+	d.AvgPerf.Range(func(key, value any) bool {
+		d.AvgPerf.LoadAndDelete(key)
+		return true
+	})
 }
 
 func (d *DemoHandler) GenerateCpu(interval ConfigScrape) {
@@ -494,7 +497,10 @@ func (d *DemoHandler) GenerateAvgCpu() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgCpu = &sync.Map{}
+	d.AvgCpu.Range(func(key, value any) bool {
+		d.AvgCpu.LoadAndDelete(key)
+		return true
+	})
 }
 
 func (d *DemoHandler) GenerateDisk(interval ConfigScrape) {
@@ -593,7 +599,10 @@ func (d *DemoHandler) GenerateAvgDisk() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgDisk = &sync.Map{}
+	d.AvgDisk.Range(func(key, value any) bool {
+		d.AvgDisk.LoadAndDelete(key)
+		return true
+	})
 }
 
 func (d *DemoHandler) GenerateNet(interval ConfigScrape) {
@@ -686,7 +695,10 @@ func (d *DemoHandler) GenerateAvgNet() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgNet = &sync.Map{}
+	d.AvgNet.Range(func(key, value any) bool {
+		d.AvgNet.LoadAndDelete(key)
+		return true
+	})
 }
 
 func (d *DemoHandler) GenerateProc(interval ConfigScrape) {
@@ -839,7 +851,10 @@ func (d *DemoHandler) GenerateAvgProc() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgProc = &sync.Map{}
+	d.AvgProc.Range(func(key, value any) bool {
+		d.AvgProc.LoadAndDelete(key)
+		return true
+	})
 }
 
 func (d *DemoHandler) GenerateDf(interval ConfigScrape) {

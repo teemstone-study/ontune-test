@@ -116,6 +116,10 @@ func main() {
 					go dh.InsertAgentData(insert_data, &wg, i)
 				}
 				wg.Wait()
+				insert_data.Range(func(key, value any) bool {
+					insert_data.Delete(key)
+					return true
+				})
 				app.AgentDataProcess = &sync.Map{}
 			}
 
@@ -133,6 +137,10 @@ func main() {
 				wg.Add(1)
 				go dh.InsertLastPerfData(insert_data, &wg)
 				wg.Wait()
+				insert_data.Range(func(key, value any) bool {
+					insert_data.Delete(key)
+					return true
+				})
 			}
 			app.GlobalChannel.LastperfInsertDone <- true
 			//app.LogWrite("log", fmt.Sprintf("lastperf insert completed %v", time.Now()))
