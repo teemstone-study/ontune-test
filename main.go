@@ -117,7 +117,7 @@ func main() {
 				}
 				wg.Wait()
 				insert_data.Range(func(key, value any) bool {
-					insert_data.Delete(key)
+					insert_data.LoadAndDelete(key)
 					return true
 				})
 				app.AgentDataProcess = &sync.Map{}
@@ -138,7 +138,7 @@ func main() {
 				go dh.InsertLastPerfData(insert_data, &wg)
 				wg.Wait()
 				insert_data.Range(func(key, value any) bool {
-					insert_data.Delete(key)
+					insert_data.LoadAndDelete(key)
 					return true
 				})
 			}
