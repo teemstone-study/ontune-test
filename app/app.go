@@ -169,6 +169,17 @@ func GetMapSize(src *sync.Map) int {
 	return size
 }
 
+func GetMapDataSize(src *sync.Map) int {
+	var data_size int
+	src.Range(func(key, value any) bool {
+		val_map := value.(*sync.Map)
+		data_size += GetMapSize(val_map)
+		return true
+	})
+
+	return data_size
+}
+
 func CopyAgentMap(src *sync.Map) *sync.Map {
 	tgt := sync.Map{}
 	src.Range(func(key, value any) bool {

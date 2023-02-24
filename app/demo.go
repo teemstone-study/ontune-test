@@ -12,24 +12,44 @@ import (
 )
 
 type DemoHandler struct {
-	Hostcount int
-	Interval  int
-	Agentinfo data.AgentinfoArr
-	Hostinfo  data.HostinfoArr
-	AvgPerf   *sync.Map
-	AvgCpu    *sync.Map
-	AvgDisk   *sync.Map
-	AvgNet    *sync.Map
-	AvgProc   *sync.Map
+	Hostcount   int
+	Interval    int
+	Agentinfo   data.AgentinfoArr
+	Hostinfo    data.HostinfoArr
+	AvgPerfPool *sync.Pool
+	AvgCpuPool  *sync.Pool
+	AvgDiskPool *sync.Pool
+	AvgNetPool  *sync.Pool
+	AvgProcPool *sync.Pool
 }
 
 func (d *DemoHandler) Init(hostcount int) {
 	d.Hostcount = hostcount
-	d.AvgPerf = &sync.Map{}
-	d.AvgCpu = &sync.Map{}
-	d.AvgDisk = &sync.Map{}
-	d.AvgNet = &sync.Map{}
-	d.AvgProc = &sync.Map{}
+	d.AvgPerfPool = &sync.Pool{
+		New: func() interface{} {
+			return &sync.Map{}
+		},
+	}
+	d.AvgCpuPool = &sync.Pool{
+		New: func() interface{} {
+			return &sync.Map{}
+		},
+	}
+	d.AvgDiskPool = &sync.Pool{
+		New: func() interface{} {
+			return &sync.Map{}
+		},
+	}
+	d.AvgNetPool = &sync.Pool{
+		New: func() interface{} {
+			return &sync.Map{}
+		},
+	}
+	d.AvgProcPool = &sync.Pool{
+		New: func() interface{} {
+			return &sync.Map{}
+		},
+	}
 }
 
 func (d *DemoHandler) InitDemoAgentInfo() {
@@ -110,6 +130,8 @@ func (d *DemoHandler) GeneratePerf(interval ConfigScrape) {
 		ts := time.Now().Unix()
 
 		var agent_perf []*data.Perf = make([]*data.Perf, 0)
+		avgperfmap := d.AvgPerfPool.Get().(*sync.Map)
+
 		for i := 0; i < d.Hostcount; i++ {
 			demo_data := &data.Perf{
 				Ontunetime:       ts,
@@ -175,14 +197,15 @@ func (d *DemoHandler) GeneratePerf(interval ConfigScrape) {
 			agent_perf = append(agent_perf, demo_data)
 
 			// Store Average Value
-			if val, ok := d.AvgPerf.LoadOrStore(demo_data.Agentid, make([]*data.Perf, 0)); ok {
+			if val, ok := avgperfmap.LoadOrStore(demo_data.Agentid, make([]*data.Perf, 0)); ok {
 				var avgvalue []*data.Perf = make([]*data.Perf, 0)
 				avgvalue = append(avgvalue, val.([]*data.Perf)...)
 				avgvalue = append(avgvalue, demo_data)
 
-				d.AvgPerf.Store(demo_data.Agentid, avgvalue)
+				avgperfmap.Store(demo_data.Agentid, avgvalue)
 			}
 		}
+		d.AvgPerfPool.Put(avgperfmap)
 
 		GlobalChannel.DemoPerfData <- agent_perf
 		time.Sleep(time.Second * time.Duration(interval.Rate))
@@ -193,7 +216,8 @@ func (d *DemoHandler) GenerateAvgPerf() {
 	var agent_perf []*data.Perf = make([]*data.Perf, 0)
 	var max_perf []*data.Perf = make([]*data.Perf, 0)
 
-	d.AvgPerf.Range(func(key, value any) bool {
+	avgperfmap := d.AvgPerfPool.Get().(*sync.Map)
+	avgperfmap.Range(func(key, value any) bool {
 		avg_data := &data.Perf{Agentid: key.(int)}
 		max_data := &data.Perf{Agentid: key.(int)}
 
@@ -385,17 +409,16 @@ func (d *DemoHandler) GenerateAvgPerf() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgPerf.Range(func(key, value any) bool {
-		d.AvgPerf.LoadAndDelete(key)
-		return true
-	})
+	d.AvgPerfPool.New()
 }
 
 func (d *DemoHandler) GenerateCpu(interval ConfigScrape) {
 	for {
 		ts := time.Now().Unix()
 
+		avgcpumap := d.AvgCpuPool.Get().(*sync.Map)
 		var agent_cpu []*data.Cpu = make([]*data.Cpu, 0)
+
 		for i := 0; i < d.Hostcount; i++ {
 			for j := 0; j < CPU_CORE; j++ {
 				demo_data := &data.Cpu{
@@ -418,14 +441,15 @@ func (d *DemoHandler) GenerateCpu(interval ConfigScrape) {
 
 				// Store Average Value
 				key := fmt.Sprintf("%d_%d", demo_data.Agentid, demo_data.Index)
-				if val, ok := d.AvgCpu.LoadOrStore(key, make([]*data.Cpu, 0)); ok {
+				if val, ok := avgcpumap.LoadOrStore(key, make([]*data.Cpu, 0)); ok {
 					var avgvalue []*data.Cpu = make([]*data.Cpu, 0)
 					avgvalue = append(avgvalue, val.([]*data.Cpu)...)
 					avgvalue = append(avgvalue, demo_data)
-					d.AvgCpu.Store(key, avgvalue)
+					avgcpumap.Store(key, avgvalue)
 				}
 			}
 		}
+		d.AvgCpuPool.Put(avgcpumap)
 
 		GlobalChannel.DemoCpuData <- agent_cpu
 		time.Sleep(time.Second * time.Duration(interval.Rate))
@@ -436,7 +460,8 @@ func (d *DemoHandler) GenerateAvgCpu() {
 	var agent_cpu []*data.Cpu = make([]*data.Cpu, 0)
 	var max_cpu []*data.Cpu = make([]*data.Cpu, 0)
 
-	d.AvgCpu.Range(func(key, value any) bool {
+	avgcpumap := d.AvgCpuPool.Get().(*sync.Map)
+	avgcpumap.Range(func(key, value any) bool {
 		slice := strings.Split(key.(string), "_")
 		agentid, err := strconv.Atoi(slice[0])
 		ErrorCheck(err)
@@ -497,17 +522,16 @@ func (d *DemoHandler) GenerateAvgCpu() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgCpu.Range(func(key, value any) bool {
-		d.AvgCpu.LoadAndDelete(key)
-		return true
-	})
+	d.AvgCpuPool.New()
 }
 
 func (d *DemoHandler) GenerateDisk(interval ConfigScrape) {
 	for {
 		ts := time.Now().Unix()
 
+		avgdiskmap := d.AvgDiskPool.Get().(*sync.Map)
 		var agent_disk []*data.Disk = make([]*data.Disk, 0)
+
 		for i := 0; i < d.Hostcount; i++ {
 			for ioid := range data.DISK_IONAME {
 				demo_data := &data.Disk{
@@ -527,14 +551,15 @@ func (d *DemoHandler) GenerateDisk(interval ConfigScrape) {
 
 				// Store Average Value
 				key := fmt.Sprintf("%d_%d", demo_data.Agentid, demo_data.Ionameid)
-				if val, ok := d.AvgDisk.LoadOrStore(key, make([]*data.Disk, 0)); ok {
+				if val, ok := avgdiskmap.LoadOrStore(key, make([]*data.Disk, 0)); ok {
 					var avgvalue []*data.Disk = make([]*data.Disk, 0)
 					avgvalue = append(avgvalue, val.([]*data.Disk)...)
 					avgvalue = append(avgvalue, demo_data)
-					d.AvgDisk.Store(key, avgvalue)
+					avgdiskmap.Store(key, avgvalue)
 				}
 			}
 		}
+		d.AvgDiskPool.Put(avgdiskmap)
 
 		GlobalChannel.DemoDiskData <- agent_disk
 		time.Sleep(time.Second * time.Duration(interval.Rate))
@@ -545,7 +570,8 @@ func (d *DemoHandler) GenerateAvgDisk() {
 	var agent_disk []*data.Disk = make([]*data.Disk, 0)
 	var max_disk []*data.Disk = make([]*data.Disk, 0)
 
-	d.AvgDisk.Range(func(key, value any) bool {
+	avgdiskmap := d.AvgDiskPool.Get().(*sync.Map)
+	avgdiskmap.Range(func(key, value any) bool {
 		slice := strings.Split(key.(string), "_")
 		agentid, err := strconv.Atoi(slice[0])
 		ErrorCheck(err)
@@ -599,17 +625,17 @@ func (d *DemoHandler) GenerateAvgDisk() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgDisk.Range(func(key, value any) bool {
-		d.AvgDisk.LoadAndDelete(key)
-		return true
-	})
+	d.AvgDiskPool.New()
+
 }
 
 func (d *DemoHandler) GenerateNet(interval ConfigScrape) {
 	for {
 		ts := time.Now().Unix()
 
+		avgnetmap := d.AvgNetPool.Get().(*sync.Map)
 		var agent_net []*data.Net = make([]*data.Net, 0)
+
 		for i := 0; i < d.Hostcount; i++ {
 			for ioid := range data.NET_IONAME {
 				demo_data := &data.Net{
@@ -628,14 +654,15 @@ func (d *DemoHandler) GenerateNet(interval ConfigScrape) {
 
 				// Store Average Value
 				key := fmt.Sprintf("%d_%d", demo_data.Agentid, demo_data.Ionameid)
-				if val, ok := d.AvgNet.LoadOrStore(key, make([]*data.Net, 0)); ok {
+				if val, ok := avgnetmap.LoadOrStore(key, make([]*data.Net, 0)); ok {
 					var avgvalue []*data.Net = make([]*data.Net, 0)
 					avgvalue = append(avgvalue, val.([]*data.Net)...)
 					avgvalue = append(avgvalue, demo_data)
-					d.AvgNet.Store(key, avgvalue)
+					avgnetmap.Store(key, avgvalue)
 				}
 			}
 		}
+		d.AvgNetPool.Put(avgnetmap)
 
 		GlobalChannel.DemoNetData <- agent_net
 		time.Sleep(time.Second * time.Duration(interval.Rate))
@@ -646,7 +673,8 @@ func (d *DemoHandler) GenerateAvgNet() {
 	var agent_net []*data.Net = make([]*data.Net, 0)
 	var max_net []*data.Net = make([]*data.Net, 0)
 
-	d.AvgNet.Range(func(key, value any) bool {
+	avgnetmap := d.AvgNetPool.Get().(*sync.Map)
+	avgnetmap.Range(func(key, value any) bool {
 		slice := strings.Split(key.(string), "_")
 		agentid, err := strconv.Atoi(slice[0])
 		ErrorCheck(err)
@@ -695,17 +723,16 @@ func (d *DemoHandler) GenerateAvgNet() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgNet.Range(func(key, value any) bool {
-		d.AvgNet.LoadAndDelete(key)
-		return true
-	})
+	d.AvgNetPool.New()
 }
 
 func (d *DemoHandler) GenerateProc(interval ConfigScrape) {
 	for {
 		ts := time.Now().Unix()
 
+		avgprocmap := d.AvgProcPool.Get().(*sync.Map)
 		var agent_proc []*data.Pid = make([]*data.Pid, 0)
+
 		for i := 0; i < d.Hostcount; i++ {
 			// 위 구조까지 포함하면 5중 For문이지만,
 			// 기본값으로 pc-3, pu-1, pa-3 이므로 실제 Loop 회수는 9회임
@@ -740,16 +767,17 @@ func (d *DemoHandler) GenerateProc(interval ConfigScrape) {
 
 						// Store Average Value
 						key := fmt.Sprintf("%d_%d_%d_%d", demo_data.Agentid, demo_data.Cmdid, demo_data.Userid, demo_data.Argid)
-						if val, ok := d.AvgProc.LoadOrStore(key, make([]*data.Pid, 0)); ok {
+						if val, ok := avgprocmap.LoadOrStore(key, make([]*data.Pid, 0)); ok {
 							var avgvalue []*data.Pid = make([]*data.Pid, 0)
 							avgvalue = append(avgvalue, val.([]*data.Pid)...)
 							avgvalue = append(avgvalue, demo_data)
-							d.AvgProc.Store(key, avgvalue)
+							avgprocmap.Store(key, avgvalue)
 						}
 					}
 				}
 			}
 		}
+		d.AvgProcPool.Put(avgprocmap)
 
 		GlobalChannel.DemoProcData <- agent_proc
 		time.Sleep(time.Second * time.Duration(interval.Rate))
@@ -760,7 +788,8 @@ func (d *DemoHandler) GenerateAvgProc() {
 	var agent_proc []*data.Pid = make([]*data.Pid, 0)
 	var max_proc []*data.Pid = make([]*data.Pid, 0)
 
-	d.AvgProc.Range(func(key, value any) bool {
+	avgprocmap := d.AvgProcPool.Get().(*sync.Map)
+	avgprocmap.Range(func(key, value any) bool {
 		slice := strings.Split(key.(string), "_")
 		agentid, err := strconv.Atoi(slice[0])
 		ErrorCheck(err)
@@ -851,10 +880,7 @@ func (d *DemoHandler) GenerateAvgProc() {
 	time.Sleep(time.Millisecond * time.Duration(1))
 
 	// Init
-	d.AvgProc.Range(func(key, value any) bool {
-		d.AvgProc.LoadAndDelete(key)
-		return true
-	})
+	d.AvgProcPool.New()
 }
 
 func (d *DemoHandler) GenerateDf(interval ConfigScrape) {
