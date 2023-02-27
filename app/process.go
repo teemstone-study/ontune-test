@@ -278,18 +278,21 @@ func (a *ProcessHandler) ProcessData() {
 	for {
 		newtime := time.Now().Unix()
 		if newtime >= a.LPtime+LASTPERF_TIMER {
-			a.ProcessLastperf(a.AgentData)
-			if val, ok := a.AgentData.LoadOrStore("lastperf", &sync.Map{}); ok {
-				GlobalChannel.LastPerfData <- val.(*sync.Map)
-				a.LPtime = newtime
-			}
+			a.LPtime = newtime
 
-			// Lastperf Init
-			<-GlobalChannel.LastperfCopyDone
-			a.LPCount = 0
-			a.AgentData.LoadAndDelete("lastperf")
-			// DBInsert Process Done
-			<-GlobalChannel.LastperfInsertDone
+			if a.LPCount > 0 {
+				a.ProcessLastperf(a.AgentData)
+				if val, ok := a.AgentData.LoadOrStore("lastperf", &sync.Map{}); ok {
+					GlobalChannel.LastPerfData <- val.(*sync.Map)
+				}
+
+				// Lastperf Init
+				<-GlobalChannel.LastperfCopyDone
+				a.LPCount = 0
+				a.AgentData.LoadAndDelete("lastperf")
+				// DBInsert Process Done
+				<-GlobalChannel.LastperfInsertDone
+			}
 		}
 		time.Sleep(time.Millisecond * time.Duration(1))
 
@@ -297,7 +300,7 @@ func (a *ProcessHandler) ProcessData() {
 			a.Ontunetime = newtime
 
 			if GetMapSize(a.AgentData) > 0 {
-				LogWrite("log", GetMapKeys(a.AgentData))
+				LogWrite("log", time.Unix(a.Ontunetime, 0).Format("15:04:05")+" "+GetMapKeys(a.AgentData))
 				GlobalChannel.AgentData <- a.AgentData
 				time.Sleep(time.Millisecond * time.Duration(1))
 
@@ -363,7 +366,7 @@ func (a *ProcessHandler) ProcessData() {
 
 				}
 				<-GlobalChannel.AgentInsertDone
-				LogWrite("log", "after"+GetMapKeys(a.AgentData))
+				LogWrite("log", "after"+time.Unix(a.Ontunetime, 0).Format("15:04:05")+" "+GetMapKeys(a.AgentData))
 			}
 		}
 		time.Sleep(time.Millisecond * time.Duration(1))
