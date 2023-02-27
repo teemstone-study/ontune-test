@@ -5,12 +5,7 @@ database:
     dbname: ontune
     username: ontune
     password: ontune
-  - name: tsdb-dbtest
-    host: 192.168.0.188
-    port: 15432
-    dbname: ontune
-    username: ontune
-    password: ontune    
+ 
 
 host:
   ignoreprocessorcountchange: 0

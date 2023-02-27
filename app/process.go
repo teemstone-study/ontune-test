@@ -12,8 +12,8 @@ import (
 
 type ProcessHandler struct {
 	AgentTableNames []map[string]string
-	AgentPool       *sync.Pool
-	//AgentData       *sync.Map
+	//AgentPool       *sync.Pool
+	AgentData   *sync.Map
 	Ontunetime  int64
 	LPtime      int64
 	LPCount     int
@@ -33,12 +33,12 @@ func (a *ProcessHandler) Init() {
 	a.AvgNettime = time.Now().Unix()
 	a.AvgCputime = time.Now().Unix()
 
-	//a.AgentData = &sync.Map{}
-	a.AgentPool = &sync.Pool{
-		New: func() interface{} {
-			return &sync.Map{}
-		},
-	}
+	a.AgentData = &sync.Map{}
+	// a.AgentPool = &sync.Pool{
+	// 	New: func() interface{} {
+	// 		return &sync.Map{}
+	// 	},
+	// }
 	a.InitTableNames()
 }
 
@@ -70,135 +70,103 @@ func (a *ProcessHandler) InitTableNames() {
 }
 
 func (a *ProcessHandler) ReceivePerf(perf_data []*data.Perf) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range perf_data {
 		tablename := a.AgentTableNames[p.Agentid%10]["realtimeperf"]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			val.(*sync.Map).Store(p.Agentid, p)
-		}
-		a.AgentPool.Put(agentData)
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		val.(*sync.Map).Store(p.Agentid, p)
 
-		a.SetLastrealtimeperf("perf", agentData, p)
-		a.SetLastperf(agentData, p, p.Agentid, p.Ontunetime)
+		a.SetLastrealtimeperf("perf", p)
+		a.SetLastperf(p, p.Agentid, p.Ontunetime)
 	}
 	a.LPCount = a.LPCount + 1
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveAvgPerf(perf_data []*data.Perf, tablename string) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range perf_data {
 		tablename := a.AgentTableNames[p.Agentid%10][tablename]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			val.(*sync.Map).Store(p.Agentid, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		val.(*sync.Map).Store(p.Agentid, p)
 	}
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveCpu(cpu_data []*data.Cpu) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range cpu_data {
 		tablename := a.AgentTableNames[p.Agentid%10]["realtimecpu"]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d", p.Agentid, p.Index)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d", p.Agentid, p.Index)
+		val.(*sync.Map).Store(key, p)
 	}
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveAvgCpu(cpu_data []*data.Cpu, tablename string) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range cpu_data {
 		tablename := a.AgentTableNames[p.Agentid%10][tablename]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d", p.Agentid, p.Index)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d", p.Agentid, p.Index)
+		val.(*sync.Map).Store(key, p)
 	}
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveDisk(disk_data []*data.Disk) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range disk_data {
 		tablename := a.AgentTableNames[p.Agentid%10]["realtimedisk"]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d", p.Agentid, p.Ionameid)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d", p.Agentid, p.Ionameid)
+		val.(*sync.Map).Store(key, p)
 	}
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveAvgDisk(disk_data []*data.Disk, tablename string) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range disk_data {
 		tablename := a.AgentTableNames[p.Agentid%10][tablename]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d", p.Agentid, p.Ionameid)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d", p.Agentid, p.Ionameid)
+		val.(*sync.Map).Store(key, p)
 	}
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveNet(net_data []*data.Net) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range net_data {
 		tablename := a.AgentTableNames[p.Agentid%10]["realtimenet"]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d", p.Agentid, p.Ionameid)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d", p.Agentid, p.Ionameid)
+		val.(*sync.Map).Store(key, p)
 	}
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveAvgNet(net_data []*data.Net, tablename string) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range net_data {
 		tablename := a.AgentTableNames[p.Agentid%10][tablename]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d", p.Agentid, p.Ionameid)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d", p.Agentid, p.Ionameid)
+		val.(*sync.Map).Store(key, p)
 	}
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveProc(pid_data []*data.Pid) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range pid_data {
 		tablename := a.AgentTableNames[p.Agentid%10]["realtimepid"]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d_%d_%d", p.Agentid, p.Cmdid, p.Userid, p.Argid)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d_%d_%d", p.Agentid, p.Cmdid, p.Userid, p.Argid)
+		val.(*sync.Map).Store(key, p)
 	}
 
 	proc_data := MakeProc(pid_data)
 
 	for _, p := range proc_data {
 		tablename := a.AgentTableNames[p.Agentid%10]["realtimeproc"]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d_%d", p.Agentid, p.Cmdid, p.Userid)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d_%d", p.Agentid, p.Cmdid, p.Userid)
+		val.(*sync.Map).Store(key, p)
 	}
-
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveAvgProc(pid_data []*data.Pid, tablename string) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range pid_data {
 		tablename := a.AgentTableNames[p.Agentid%10][tablename]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d_%d_%d", p.Agentid, p.Cmdid, p.Userid, p.Argid)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d_%d_%d", p.Agentid, p.Cmdid, p.Userid, p.Argid)
+		val.(*sync.Map).Store(key, p)
 	}
 
 	var proctablename string
@@ -213,106 +181,96 @@ func (a *ProcessHandler) ReceiveAvgProc(pid_data []*data.Pid, tablename string) 
 
 	for _, p := range proc_data {
 		tablename := a.AgentTableNames[p.Agentid%10][proctablename]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d_%d", p.Agentid, p.Cmdid, p.Userid)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d_%d", p.Agentid, p.Cmdid, p.Userid)
+		val.(*sync.Map).Store(key, p)
 	}
-
-	a.AgentPool.Put(agentData)
 }
 
 func (a *ProcessHandler) ReceiveAvgDf(df_data []*data.Df) {
-	agentData := a.AgentPool.Get().(*sync.Map)
 	for _, p := range df_data {
 		tablename := a.AgentTableNames[p.Agentid%10]["avgdf"]
-		if val, ok := agentData.LoadOrStore(tablename, &sync.Map{}); ok {
-			key := fmt.Sprintf("%d_%d", p.Agentid, p.Dfnameid)
-			val.(*sync.Map).Store(key, p)
-		}
+		val, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		key := fmt.Sprintf("%d_%d", p.Agentid, p.Dfnameid)
+		val.(*sync.Map).Store(key, p)
 	}
-	a.AgentPool.Put(agentData)
 }
 
-func (a *ProcessHandler) SetLastrealtimeperf(item_type string, agent_data *sync.Map, input_data interface{}) {
+func (a *ProcessHandler) SetLastrealtimeperf(item_type string, input_data interface{}) {
 	tablename := "lastrealtimeperf"
 
 	switch item_type {
 	case "perf":
 		src := input_data.(*data.Perf)
-		if aval, aok := agent_data.LoadOrStore(tablename, &sync.Map{}); aok {
-			if val, ok := aval.(*sync.Map).LoadOrStore(src.Agentid, &data.Lastrealtimeperf{}); ok {
-				tgt := val.(*data.Lastrealtimeperf)
+		aval, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+		val, _ := aval.(*sync.Map).LoadOrStore(src.Agentid, &data.Lastrealtimeperf{})
 
-				// Overwrite
-				tgt.Ontunetime = src.Ontunetime
-				tgt.Agentid = src.Agentid
-				tgt.Hostname = MapHostInfo[src.Agentid]
-				tgt.User = src.User
-				tgt.Sys = src.Sys
-				tgt.Wait = src.Wait
-				tgt.Idle = src.Idle
-				tgt.Memoryused = src.Memoryused
-				tgt.Filecache = src.Memorycache
-				tgt.Memorysize = src.Memorysize
-				tgt.Avm = src.Avm
-				tgt.Swapused = src.Swapused
-				tgt.Swapsize = src.Swapsize
-				tgt.Diskiorate = src.Diskreadwrite
-				tgt.Networkiorate = src.Networkreadwrite
-				tgt.Topcpu = src.Topcpu
-				tgt.Topbusy = src.Topbusy
-				tgt.Diskiops = src.Diskiops
-				tgt.Networkiops = src.Networkiops
-			}
-		}
+		tgt := val.(*data.Lastrealtimeperf)
+
+		// Overwrite
+		tgt.Ontunetime = src.Ontunetime
+		tgt.Agentid = src.Agentid
+		tgt.Hostname = MapHostInfo[src.Agentid]
+		tgt.User = src.User
+		tgt.Sys = src.Sys
+		tgt.Wait = src.Wait
+		tgt.Idle = src.Idle
+		tgt.Memoryused = src.Memoryused
+		tgt.Filecache = src.Memorycache
+		tgt.Memorysize = src.Memorysize
+		tgt.Avm = src.Avm
+		tgt.Swapused = src.Swapused
+		tgt.Swapsize = src.Swapsize
+		tgt.Diskiorate = src.Diskreadwrite
+		tgt.Networkiorate = src.Networkreadwrite
+		tgt.Topcpu = src.Topcpu
+		tgt.Topbusy = src.Topbusy
+		tgt.Diskiops = src.Diskiops
+		tgt.Networkiops = src.Networkiops
 	}
 }
 
-func (a *ProcessHandler) SetLastperf(agent_data *sync.Map, input_data interface{}, agent_id int, ontunetime int64) {
+func (a *ProcessHandler) SetLastperf(input_data interface{}, agent_id int, ontunetime int64) {
 	tablename := "lastperf"
 
-	if aval, aok := agent_data.LoadOrStore(tablename, &sync.Map{}); aok {
-		if val, ok := aval.(*sync.Map).LoadOrStore(agent_id, &data.Lastperf{}); ok {
-			tgt := val.(*data.Lastperf)
-			tgt.Ontunetime = int64(math.Max(float64(tgt.Ontunetime), float64(ontunetime)))
-			tgt.Hostname = MapHostInfo[agent_id]
+	aval, _ := a.AgentData.LoadOrStore(tablename, &sync.Map{})
+	val, _ := aval.(*sync.Map).LoadOrStore(agent_id, &data.Lastperf{})
+	tgt := val.(*data.Lastperf)
+	tgt.Ontunetime = int64(math.Max(float64(tgt.Ontunetime), float64(ontunetime)))
+	tgt.Hostname = MapHostInfo[agent_id]
 
-			// Add and Replace
-			if src_perf, ok := input_data.(*data.Perf); ok {
-				tgt.User = tgt.User + src_perf.User
-				tgt.Sys = tgt.Sys + src_perf.Sys
-				tgt.Wait = tgt.Wait + src_perf.Wait
-				tgt.Idle = tgt.Idle + src_perf.Idle
-				tgt.Avm = tgt.Avm + src_perf.Avm
-				tgt.Memoryused = tgt.Memoryused + src_perf.Memoryused
-				tgt.Filecache = tgt.Filecache + src_perf.Memorycache
-				tgt.Swapused = tgt.Swapused + src_perf.Swapused
-				tgt.Diskiorate = tgt.Diskiorate + src_perf.Diskreadwrite
-				tgt.Networkiorate = tgt.Networkiorate + src_perf.Networkreadwrite
-				tgt.Topcpu = tgt.Topcpu + src_perf.Topcpu
-				tgt.Topbusy = tgt.Topbusy + src_perf.Topbusy
-				tgt.Runqueue = tgt.Runqueue + src_perf.Runqueue
-				tgt.Blockqueue = tgt.Blockqueue + src_perf.Blockqueue
-				tgt.Pagingspacein = tgt.Pagingspacein + src_perf.Pagingspacein
-				tgt.Pagingspaceout = tgt.Pagingspaceout + src_perf.Pagingspaceout
-				tgt.Filesystemin = tgt.Filesystemin + src_perf.Filesystemin
-				tgt.Filesystemout = tgt.Filesystemout + src_perf.Filesystemout
-				tgt.Memoryscan = tgt.Memoryscan + src_perf.Memoryscan
-				tgt.Memoryfreed = tgt.Memoryfreed + src_perf.Memoryfreed
-				tgt.Swapactive = tgt.Swapactive + src_perf.Swapactive
-				tgt.Fork = tgt.Fork + src_perf.Fork
-				tgt.Exec = tgt.Exec + src_perf.Exec
-				tgt.Interupt = tgt.Interupt + src_perf.Interupt
-				tgt.Systemcall = tgt.Systemcall + src_perf.Systemcall
-				tgt.Contextswitch = tgt.Contextswitch + src_perf.Contextswitch
-				tgt.Semaphore = tgt.Semaphore + src_perf.Semaphore
-				tgt.Msg = tgt.Msg + src_perf.Msg
-				tgt.Diskiops = tgt.Diskiops + src_perf.Diskiops
-				tgt.Networkiops = tgt.Networkiops + src_perf.Networkiops
-			}
-
-		}
+	// Add and Replace
+	if src_perf, ok := input_data.(*data.Perf); ok {
+		tgt.User = tgt.User + src_perf.User
+		tgt.Sys = tgt.Sys + src_perf.Sys
+		tgt.Wait = tgt.Wait + src_perf.Wait
+		tgt.Idle = tgt.Idle + src_perf.Idle
+		tgt.Avm = tgt.Avm + src_perf.Avm
+		tgt.Memoryused = tgt.Memoryused + src_perf.Memoryused
+		tgt.Filecache = tgt.Filecache + src_perf.Memorycache
+		tgt.Swapused = tgt.Swapused + src_perf.Swapused
+		tgt.Diskiorate = tgt.Diskiorate + src_perf.Diskreadwrite
+		tgt.Networkiorate = tgt.Networkiorate + src_perf.Networkreadwrite
+		tgt.Topcpu = tgt.Topcpu + src_perf.Topcpu
+		tgt.Topbusy = tgt.Topbusy + src_perf.Topbusy
+		tgt.Runqueue = tgt.Runqueue + src_perf.Runqueue
+		tgt.Blockqueue = tgt.Blockqueue + src_perf.Blockqueue
+		tgt.Pagingspacein = tgt.Pagingspacein + src_perf.Pagingspacein
+		tgt.Pagingspaceout = tgt.Pagingspaceout + src_perf.Pagingspaceout
+		tgt.Filesystemin = tgt.Filesystemin + src_perf.Filesystemin
+		tgt.Filesystemout = tgt.Filesystemout + src_perf.Filesystemout
+		tgt.Memoryscan = tgt.Memoryscan + src_perf.Memoryscan
+		tgt.Memoryfreed = tgt.Memoryfreed + src_perf.Memoryfreed
+		tgt.Swapactive = tgt.Swapactive + src_perf.Swapactive
+		tgt.Fork = tgt.Fork + src_perf.Fork
+		tgt.Exec = tgt.Exec + src_perf.Exec
+		tgt.Interupt = tgt.Interupt + src_perf.Interupt
+		tgt.Systemcall = tgt.Systemcall + src_perf.Systemcall
+		tgt.Contextswitch = tgt.Contextswitch + src_perf.Contextswitch
+		tgt.Semaphore = tgt.Semaphore + src_perf.Semaphore
+		tgt.Msg = tgt.Msg + src_perf.Msg
+		tgt.Diskiops = tgt.Diskiops + src_perf.Diskiops
+		tgt.Networkiops = tgt.Networkiops + src_perf.Networkiops
 	}
 }
 
@@ -320,9 +278,8 @@ func (a *ProcessHandler) ProcessData() {
 	for {
 		newtime := time.Now().Unix()
 		if newtime >= a.LPtime+LASTPERF_TIMER {
-			agentData := a.AgentPool.Get().(*sync.Map)
-			a.ProcessLastperf(agentData)
-			if val, ok := agentData.LoadOrStore("lastperf", &sync.Map{}); ok {
+			a.ProcessLastperf(a.AgentData)
+			if val, ok := a.AgentData.LoadOrStore("lastperf", &sync.Map{}); ok {
 				GlobalChannel.LastPerfData <- val.(*sync.Map)
 				a.LPtime = newtime
 			}
@@ -330,81 +287,84 @@ func (a *ProcessHandler) ProcessData() {
 			// Lastperf Init
 			<-GlobalChannel.LastperfCopyDone
 			a.LPCount = 0
-			agentData.LoadAndDelete("lastperf")
-			a.AgentPool.Put(agentData)
+			a.AgentData.LoadAndDelete("lastperf")
 			// DBInsert Process Done
 			<-GlobalChannel.LastperfInsertDone
 		}
 		time.Sleep(time.Millisecond * time.Duration(1))
 
 		if newtime >= a.Ontunetime+PROCESS_TIMER {
-			agentData := a.AgentPool.Get().(*sync.Map)
-			GlobalChannel.AgentData <- agentData
 			a.Ontunetime = newtime
-			time.Sleep(time.Millisecond * time.Duration(1))
 
-			// Realtime, AvgPerf Init
-			<-GlobalChannel.AgentCopyDone
-			for i := 0; i < 10; i++ {
-				realtimetablename := a.AgentTableNames[i]["realtimeperf"]
-				agentData.LoadAndDelete(realtimetablename)
+			if GetMapSize(a.AgentData) > 0 {
+				LogWrite("log", GetMapKeys(a.AgentData))
+				GlobalChannel.AgentData <- a.AgentData
+				time.Sleep(time.Millisecond * time.Duration(1))
 
-				avgtablename := a.AgentTableNames[i]["avgperf"]
-				agentData.LoadAndDelete(avgtablename)
+				// Realtime, AvgPerf Init
+				<-GlobalChannel.AgentCopyDone
+				for i := 0; i < 10; i++ {
+					realtimetablename := a.AgentTableNames[i]["realtimeperf"]
+					a.AgentData.LoadAndDelete(realtimetablename)
 
-				avgmaxtablename := a.AgentTableNames[i]["avgmaxperf"]
-				agentData.LoadAndDelete(avgmaxtablename)
+					avgtablename := a.AgentTableNames[i]["avgperf"]
+					a.AgentData.LoadAndDelete(avgtablename)
 
-				realtimetablename = a.AgentTableNames[i]["realtimecpu"]
-				agentData.LoadAndDelete(realtimetablename)
+					avgmaxtablename := a.AgentTableNames[i]["avgmaxperf"]
+					a.AgentData.LoadAndDelete(avgmaxtablename)
 
-				avgtablename = a.AgentTableNames[i]["avgcpu"]
-				agentData.LoadAndDelete(avgtablename)
+					realtimetablename = a.AgentTableNames[i]["realtimecpu"]
+					a.AgentData.LoadAndDelete(realtimetablename)
 
-				avgmaxtablename = a.AgentTableNames[i]["avgmaxcpu"]
-				agentData.LoadAndDelete(avgmaxtablename)
+					avgtablename = a.AgentTableNames[i]["avgcpu"]
+					a.AgentData.LoadAndDelete(avgtablename)
 
-				realtimetablename = a.AgentTableNames[i]["realtimedisk"]
-				agentData.LoadAndDelete(realtimetablename)
+					avgmaxtablename = a.AgentTableNames[i]["avgmaxcpu"]
+					a.AgentData.LoadAndDelete(avgmaxtablename)
 
-				avgtablename = a.AgentTableNames[i]["avgdisk"]
-				agentData.LoadAndDelete(avgtablename)
+					realtimetablename = a.AgentTableNames[i]["realtimedisk"]
+					a.AgentData.LoadAndDelete(realtimetablename)
 
-				avgmaxtablename = a.AgentTableNames[i]["avgmaxdisk"]
-				agentData.LoadAndDelete(avgmaxtablename)
+					avgtablename = a.AgentTableNames[i]["avgdisk"]
+					a.AgentData.LoadAndDelete(avgtablename)
 
-				realtimetablename = a.AgentTableNames[i]["realtimenet"]
-				agentData.LoadAndDelete(realtimetablename)
+					avgmaxtablename = a.AgentTableNames[i]["avgmaxdisk"]
+					a.AgentData.LoadAndDelete(avgmaxtablename)
 
-				avgtablename = a.AgentTableNames[i]["avgnet"]
-				agentData.LoadAndDelete(avgtablename)
+					realtimetablename = a.AgentTableNames[i]["realtimenet"]
+					a.AgentData.LoadAndDelete(realtimetablename)
 
-				avgmaxtablename = a.AgentTableNames[i]["avgmaxnet"]
-				agentData.LoadAndDelete(avgmaxtablename)
+					avgtablename = a.AgentTableNames[i]["avgnet"]
+					a.AgentData.LoadAndDelete(avgtablename)
 
-				realtimetablename = a.AgentTableNames[i]["realtimepid"]
-				agentData.LoadAndDelete(realtimetablename)
+					avgmaxtablename = a.AgentTableNames[i]["avgmaxnet"]
+					a.AgentData.LoadAndDelete(avgmaxtablename)
 
-				avgtablename = a.AgentTableNames[i]["avgpid"]
-				agentData.LoadAndDelete(avgtablename)
+					realtimetablename = a.AgentTableNames[i]["realtimepid"]
+					a.AgentData.LoadAndDelete(realtimetablename)
 
-				avgmaxtablename = a.AgentTableNames[i]["avgmaxpid"]
-				agentData.LoadAndDelete(avgmaxtablename)
+					avgtablename = a.AgentTableNames[i]["avgpid"]
+					a.AgentData.LoadAndDelete(avgtablename)
 
-				realtimetablename = a.AgentTableNames[i]["realtimeproc"]
-				agentData.LoadAndDelete(realtimetablename)
+					avgmaxtablename = a.AgentTableNames[i]["avgmaxpid"]
+					a.AgentData.LoadAndDelete(avgmaxtablename)
 
-				avgtablename = a.AgentTableNames[i]["avgproc"]
-				agentData.LoadAndDelete(avgtablename)
+					realtimetablename = a.AgentTableNames[i]["realtimeproc"]
+					a.AgentData.LoadAndDelete(realtimetablename)
 
-				avgmaxtablename = a.AgentTableNames[i]["avgmaxproc"]
-				agentData.LoadAndDelete(avgmaxtablename)
+					avgtablename = a.AgentTableNames[i]["avgproc"]
+					a.AgentData.LoadAndDelete(avgtablename)
 
-				avgtablename = a.AgentTableNames[i]["avgdf"]
-				agentData.LoadAndDelete(avgtablename)
+					avgmaxtablename = a.AgentTableNames[i]["avgmaxproc"]
+					a.AgentData.LoadAndDelete(avgmaxtablename)
 
+					avgtablename = a.AgentTableNames[i]["avgdf"]
+					a.AgentData.LoadAndDelete(avgtablename)
+
+				}
+				<-GlobalChannel.AgentInsertDone
+				LogWrite("log", "after"+GetMapKeys(a.AgentData))
 			}
-			<-GlobalChannel.AgentInsertDone
 		}
 		time.Sleep(time.Millisecond * time.Duration(1))
 	}
